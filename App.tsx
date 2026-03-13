@@ -268,18 +268,18 @@ const App: React.FC = () => {
 
       {/* Header / Nav */}
       <div className={`w-full flex items-center justify-center shrink-0 ${mode === 'MOSAIC' ? 'max-w-[95%] mb-4' : 'max-w-6xl mb-8'}`}>
-         <div className="flex bg-zinc-900/50 p-1 rounded-lg border border-white/5">
+         <div className="flex bg-white/5 backdrop-blur-md p-1.5 rounded-2xl border border-white/10 shadow-2xl">
             <button
                 onClick={() => setMode('MIX')}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-xs font-mono font-bold transition-all ${mode === 'MIX' ? 'bg-accent text-white shadow-lg shadow-blue-500/20' : 'text-zinc-500 hover:text-white'}`}
+                className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold tracking-wide transition-all duration-300 ${mode === 'MIX' ? 'bg-white/10 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)]' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
             >
-                <Layers size={14} /> MIX
+                <Layers size={16} /> MIX
             </button>
             <button
                 onClick={() => setMode('MOSAIC')}
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-md text-xs font-mono font-bold transition-all ${mode === 'MOSAIC' ? 'bg-accent text-white shadow-lg shadow-blue-500/20' : 'text-zinc-500 hover:text-white'}`}
+                className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold tracking-wide transition-all duration-300 ${mode === 'MOSAIC' ? 'bg-white/10 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)]' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
             >
-                <Grid2X2 size={14} /> MOSAIC
+                <Grid2X2 size={16} /> MOSAIC
             </button>
          </div>
       </div>
@@ -304,11 +304,11 @@ const App: React.FC = () => {
 
                 {/* Error Message */}
                 {error && (
-                    <div className="p-4 bg-red-950/40 border border-red-500/20 rounded-lg flex gap-3 items-start shadow-lg backdrop-blur-sm">
-                        <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                    <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex gap-3 items-start shadow-lg backdrop-blur-md">
+                        <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
                         <div className="flex-1 min-w-0">
-                            <h3 className="text-red-400 text-xs font-bold font-mono uppercase mb-1 tracking-wider">Generation Interrupted</h3>
-                            <p className="text-red-200/90 text-xs font-mono leading-relaxed break-words">
+                            <h3 className="text-red-400 text-xs font-bold uppercase mb-1 tracking-wider">Generation Interrupted</h3>
+                            <p className="text-red-200/90 text-sm leading-relaxed break-words">
                                 {error}
                             </p>
                         </div>
@@ -316,7 +316,7 @@ const App: React.FC = () => {
                 )}
 
                 {/* Unified Inputs & Actions Panel */}
-                <div className="w-full bg-zinc-900/40 backdrop-blur-sm border border-white/5 rounded-xl p-5">
+                <div className="w-full bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl rounded-3xl p-6">
                     <ImageUploader 
                         images={images} 
                         onAddImages={handleAddImages} 

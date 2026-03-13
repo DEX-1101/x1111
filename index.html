@@ -6,13 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Gemini Collage Mixer</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         theme: {
           extend: {
             fontFamily: {
-              sans: ['Segoe UI', 'sans-serif'],
+              sans: ['Inter', 'system-ui', 'sans-serif'],
               mono: ['JetBrains Mono', 'monospace'],
             },
             colors: {
@@ -43,22 +43,26 @@
     <style>
       body {
         background-color: #09090b;
+        background-image: 
+          radial-gradient(at 15% 50%, rgba(59, 130, 246, 0.08) 0px, transparent 50%),
+          radial-gradient(at 85% 30%, rgba(139, 92, 246, 0.08) 0px, transparent 50%);
+        background-attachment: fixed;
         color: #e4e4e7;
-        font-family: 'Segoe UI', sans-serif;
+        font-family: 'Inter', system-ui, sans-serif;
       }
       /* Custom scrollbar for headless feel */
       ::-webkit-scrollbar {
         width: 6px;
       }
       ::-webkit-scrollbar-track {
-        background: #09090b;
+        background: transparent;
       }
       ::-webkit-scrollbar-thumb {
-        background: #27272a;
-        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #3f3f46;
+        background: rgba(255, 255, 255, 0.2);
       }
     </style>
   <script type="importmap">

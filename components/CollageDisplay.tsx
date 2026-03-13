@@ -678,20 +678,19 @@ export const CollageDisplay: React.FC<CollageDisplayProps> = ({
         <div className="w-full flex items-center justify-center relative">
             {!renderLayout ? (
                 <div 
-                    className="w-full relative rounded-xl overflow-hidden bg-zinc-900/50 shadow-2xl transition-all duration-500 border border-white/5" 
+                    className="w-full relative rounded-3xl overflow-hidden bg-white/5 shadow-2xl transition-all duration-500 border border-white/10 backdrop-blur-sm" 
                     style={{ 
                         aspectRatio: `${rw}/${rh}`,
                         maxWidth: `calc(75vh * ${ratio})`
                     }}
                 >
                     {/* Placeholder Content */}
-                    <div className="absolute inset-[-100%] bg-[conic-gradient(from_0deg,#09090b_0deg,#ffffff_180deg,#09090b_360deg)] opacity-10"></div>
-                    <div className="absolute inset-[1px] bg-zinc-950/80 backdrop-blur-3xl rounded-xl flex flex-col items-center justify-center gap-6">
-                        <div className="relative w-40 h-[2px] bg-zinc-800/50 rounded-full overflow-hidden">
-                            <div className="absolute inset-0 bg-blue-500/20 blur-[2px] animate-pulse"></div>
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-500 to-transparent w-full h-full -translate-x-full animate-shimmer"></div>
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-2xl rounded-3xl flex flex-col items-center justify-center gap-6">
+                        <div className="relative w-48 h-[3px] bg-white/10 rounded-full overflow-hidden">
+                            <div className="absolute inset-0 bg-blue-500/30 blur-[4px] animate-pulse"></div>
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-400 to-transparent w-full h-full -translate-x-full animate-shimmer"></div>
                         </div>
-                        <p className="text-zinc-500 font-mono text-xs uppercase tracking-[0.2em] animate-pulse">
+                        <p className="text-zinc-400 font-semibold text-sm uppercase tracking-[0.3em] animate-pulse">
                             Ready for Input
                         </p>
                     </div>
@@ -699,7 +698,7 @@ export const CollageDisplay: React.FC<CollageDisplayProps> = ({
             ) : (
                 <div 
                   ref={containerRef}
-                  className="relative bg-zinc-900 overflow-hidden shadow-2xl ring-1 ring-white/10 rounded-sm group/container touch-none transition-all duration-500 w-full"
+                  className="relative bg-black/40 overflow-hidden shadow-2xl ring-1 ring-white/10 rounded-2xl group/container touch-none transition-all duration-500 w-full backdrop-blur-sm"
                   style={{
                     aspectRatio: `${rw}/${rh}`,
                     maxWidth: `calc(75vh * ${ratio})`,
