@@ -281,6 +281,7 @@ export const MosaicEditor: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cursorRef = useRef<HTMLDivElement>(null);
   
   // Cache the pixelated canvas
   const pixelatedCacheRef = useRef<HTMLCanvasElement | null>(null);
@@ -314,6 +315,12 @@ export const MosaicEditor: React.FC = () => {
         window.removeEventListener('keyup', handleKeyUp);
     };
   }, []);
+
+  useEffect(() => {
+      if (cursorRef.current && (isSpacePressed || activeTab !== 'tools')) {
+          cursorRef.current.style.display = 'none';
+      }
+  }, [isSpacePressed, activeTab]);
 
   // --- Persistence Logic ---
   
@@ -831,9 +838,23 @@ export const MosaicEditor: React.FC = () => {
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-      if (!isDragging || !activeImage) return;
+      if (!activeImage) return;
 
       const { x, y, canvasX, canvasY } = getImgCoords(e);
+      
+      if (cursorRef.current) {
+          if (activeTab === 'tools' && !isSpacePressed) {
+              cursorRef.current.style.display = 'block';
+              const scaledSize = brushSize * transform.k;
+              cursorRef.current.style.width = `${scaledSize}px`;
+              cursorRef.current.style.height = `${scaledSize}px`;
+              cursorRef.current.style.transform = `translate3d(calc(${canvasX}px - 50%), calc(${canvasY}px - 50%), 0)`;
+          } else {
+              cursorRef.current.style.display = 'none';
+          }
+      }
+
+      if (!isDragging) return;
       
       if (isSpacePressed) {
           if (lastPointerRef.current) {
@@ -890,6 +911,13 @@ export const MosaicEditor: React.FC = () => {
       setIsDragging(false);
       setCurrentPath(null);
       lastPointerRef.current = null;
+  };
+
+  const handlePointerLeave = (e: React.PointerEvent) => {
+      handlePointerUp(e);
+      if (cursorRef.current) {
+          cursorRef.current.style.display = 'none';
+      }
   };
 
   // --- Actions ---
@@ -1123,31 +1151,39 @@ export const MosaicEditor: React.FC = () => {
             className={`
                 flex-1 min-h-[400px] rounded-xl border border-white/5 relative overflow-hidden group/canvas select-none
                 ${activeImage ? 'bg-gradient-to-b from-[#353535] to-[#1e1e1e]' : 'bg-zinc-900/50'}
-                ${isSpacePressed ? 'cursor-grab active:cursor-grabbing' : (activeTab === 'tools' ? 'cursor-crosshair' : (activeTab === 'watermark' && watermark.enabled ? 'cursor-move' : 'cursor-default'))}
+                ${isSpacePressed ? 'cursor-grab active:cursor-grabbing' : (activeImage && activeTab === 'tools' ? 'cursor-none' : (activeImage && activeTab === 'watermark' && watermark.enabled ? 'cursor-move' : 'cursor-default'))}
             `}
         >
             {activeImage ? (
-                <canvas 
-                    ref={canvasRef}
-                    className="block touch-none"
-                    onWheel={handleWheel}
-                    onPointerDown={handlePointerDown}
-                    onPointerMove={handlePointerMove}
-                    onPointerUp={handlePointerUp}
-                    onPointerLeave={handlePointerUp}
-                />
+                <>
+                    <canvas 
+                        ref={canvasRef}
+                        className="block touch-none"
+                        onWheel={handleWheel}
+                        onPointerDown={handlePointerDown}
+                        onPointerMove={handlePointerMove}
+                        onPointerUp={handlePointerUp}
+                        onPointerLeave={handlePointerLeave}
+                        onPointerEnter={handlePointerMove}
+                    />
+                    <div 
+                        ref={cursorRef} 
+                        className="absolute top-0 left-0 pointer-events-none rounded-full border border-white/80 shadow-[0_0_4px_rgba(0,0,0,0.5)] mix-blend-difference z-50"
+                        style={{
+                            display: 'none',
+                            willChange: 'transform, width, height'
+                        }}
+                    />
+                </>
             ) : (
-                <div className="w-full h-full relative overflow-hidden">
-                    <div className="absolute inset-[-100%] bg-[conic-gradient(from_0deg,#09090b_0deg,#ffffff_180deg,#09090b_360deg)] opacity-10"></div>
-                    <div className="absolute inset-[1px] bg-zinc-950/80 backdrop-blur-3xl rounded-xl flex flex-col items-center justify-center gap-6">
-                        <div className="relative w-40 h-[2px] bg-zinc-800/50 rounded-full overflow-hidden">
-                            <div className="absolute inset-0 bg-blue-500/20 blur-[2px] animate-pulse"></div>
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-500 to-transparent w-full h-full -translate-x-full animate-shimmer"></div>
-                        </div>
-                        <div className="flex flex-col items-center gap-3 text-zinc-500 font-mono text-xs uppercase tracking-[0.2em] animate-pulse">
-                            <ImagePlus size={24} className="opacity-50" />
-                            <span>Ready for Input</span>
-                        </div>
+                <div className="w-full h-full relative overflow-hidden rounded-xl bg-white/5 border border-white/10 backdrop-blur-md flex flex-col items-center justify-center gap-6">
+                    <div className="relative w-40 h-[2px] bg-zinc-800/50 rounded-full overflow-hidden">
+                        <div className="absolute inset-0 bg-blue-500/20 blur-[2px] animate-pulse"></div>
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-500 to-transparent w-full h-full -translate-x-full animate-shimmer"></div>
+                    </div>
+                    <div className="flex flex-col items-center gap-3 text-zinc-400 text-sm font-medium tracking-wide">
+                        <ImagePlus size={28} className="opacity-60" />
+                        <span>Ready for Input</span>
                     </div>
                 </div>
             )}
@@ -1180,30 +1216,30 @@ export const MosaicEditor: React.FC = () => {
                     />
                     
                     {activeImage && (
-                        <div className="flex bg-zinc-800 rounded-lg p-1 border border-white/10 ml-2">
+                        <div className="flex bg-black/20 backdrop-blur-md rounded-lg p-1 border border-white/10 ml-2">
                              <button 
                                 onClick={() => setActiveTab('tools')}
-                                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-mono font-bold transition-all ${activeTab === 'tools' ? 'bg-zinc-600 text-white shadow-sm' : 'text-zinc-500 hover:text-white'}`}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${activeTab === 'tools' ? 'bg-white/10 text-white shadow-sm' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
                              >
-                                <Brush size={14} /> TOOLS
+                                <Brush size={14} /> Tools
                              </button>
                              <button 
                                 onClick={() => setActiveTab('effects')}
-                                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-mono font-bold transition-all ${activeTab === 'effects' ? 'bg-zinc-600 text-white shadow-sm' : 'text-zinc-500 hover:text-white'}`}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${activeTab === 'effects' ? 'bg-white/10 text-white shadow-sm' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
                              >
-                                <Aperture size={14} /> EFFECTS
+                                <Aperture size={14} /> Effects
                              </button>
                              <button 
                                 onClick={() => setActiveTab('watermark')}
-                                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-mono font-bold transition-all ${activeTab === 'watermark' ? 'bg-zinc-600 text-white shadow-sm' : 'text-zinc-500 hover:text-white'}`}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${activeTab === 'watermark' ? 'bg-white/10 text-white shadow-sm' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
                              >
-                                <Type size={14} /> WATERMARK
+                                <Type size={14} /> Watermark
                              </button>
                              <button 
                                 onClick={() => setActiveTab('export')}
-                                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-mono font-bold transition-all ${activeTab === 'export' ? 'bg-zinc-600 text-white shadow-sm' : 'text-zinc-500 hover:text-white'}`}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${activeTab === 'export' ? 'bg-white/10 text-white shadow-sm' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
                              >
-                                <FileArchive size={14} /> EXPORT
+                                <FileArchive size={14} /> Export
                              </button>
                         </div>
                     )}
@@ -1211,22 +1247,22 @@ export const MosaicEditor: React.FC = () => {
                     {activeImage && activeTab === 'tools' && (
                         <div className="flex items-center pl-4 border-l border-white/10 animate-in fade-in slide-in-from-left-2 duration-200">
                             <div className="flex items-center gap-1 mr-4">
-                                <button onClick={() => handleRotate('left')} className="p-2 text-zinc-400 hover:text-white hover:bg-white/10 rounded" title="Rotate Left"><RotateCcw size={16} /></button>
-                                <button onClick={() => handleRotate('right')} className="p-2 text-zinc-400 hover:text-white hover:bg-white/10 rounded" title="Rotate Right"><RotateCw size={16} /></button>
+                                <button onClick={() => handleRotate('left')} className="p-2 text-zinc-400 hover:text-white hover:bg-white/10 rounded-md transition-colors" title="Rotate Left"><RotateCcw size={16} /></button>
+                                <button onClick={() => handleRotate('right')} className="p-2 text-zinc-400 hover:text-white hover:bg-white/10 rounded-md transition-colors" title="Rotate Right"><RotateCw size={16} /></button>
                             </div>
                             <div className="flex items-center gap-3">
-                                <span className="text-[10px] font-mono text-zinc-500 uppercase">Size</span>
-                                <input type="range" min="20" max="300" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-32 h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer" />
+                                <span className="text-xs font-medium text-zinc-400">Size</span>
+                                <input type="range" min="20" max="300" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} className="w-32 h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-white" />
                             </div>
                             {brushType === 'mosaic' && (
                                 <div className="flex items-center gap-3 ml-4 border-l border-white/10 pl-4 animate-in fade-in zoom-in duration-200">
-                                    <span className="text-[10px] font-mono text-zinc-500 uppercase">Block</span>
-                                    <input type="range" min="2" max="60" value={mosaicScale} onChange={(e) => setMosaicScale(parseInt(e.target.value))} className="w-24 h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer" />
+                                    <span className="text-xs font-medium text-zinc-400">Block</span>
+                                    <input type="range" min="2" max="60" value={mosaicScale} onChange={(e) => setMosaicScale(parseInt(e.target.value))} className="w-24 h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-white" />
                                 </div>
                             )}
-                            <div className="flex bg-zinc-800 rounded-lg p-1 border border-white/10 ml-4">
-                                <button onClick={() => setBrushType('mosaic')} className={`p-2 rounded-md transition-all ${brushType === 'mosaic' ? 'bg-white/10 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`} title="Mosaic Blur"><Grid3X3 size={18} /></button>
-                                <button onClick={() => setBrushType('white')} className={`p-2 rounded-md transition-all ${brushType === 'white' ? 'bg-white/10 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`} title="White Paint"><Square size={18} fill="currentColor" /></button>
+                            <div className="flex bg-black/20 backdrop-blur-md rounded-lg p-1 border border-white/10 ml-4">
+                                <button onClick={() => setBrushType('mosaic')} className={`p-1.5 rounded-md transition-all ${brushType === 'mosaic' ? 'bg-white/10 text-white shadow-sm' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`} title="Mosaic Blur"><Grid3X3 size={16} /></button>
+                                <button onClick={() => setBrushType('white')} className={`p-1.5 rounded-md transition-all ${brushType === 'white' ? 'bg-white/10 text-white shadow-sm' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`} title="White Paint"><Square size={16} fill="currentColor" /></button>
                             </div>
                         </div>
                     )}
@@ -1234,17 +1270,17 @@ export const MosaicEditor: React.FC = () => {
                     {activeImage && activeTab === 'effects' && (
                         <div className="flex items-center gap-4 pl-4 border-l border-white/10 animate-in fade-in slide-in-from-left-2 duration-200">
                              <div className="flex items-center gap-2">
-                                <button onClick={() => updateVignette({ enabled: !activeImage.vignette.enabled })} className={`text-xs font-mono font-bold px-3 py-1 rounded border transition-colors ${activeImage.vignette.enabled ? 'bg-accent/20 text-accent border-accent/50' : 'bg-zinc-800 text-zinc-500 border-transparent hover:text-zinc-300'}`}>
-                                    {activeImage.vignette.enabled ? 'ON' : 'OFF'}
+                                <button onClick={() => updateVignette({ enabled: !activeImage.vignette.enabled })} className={`text-xs font-medium px-3 py-1.5 rounded-md border transition-colors ${activeImage.vignette.enabled ? 'bg-white/10 text-white border-white/20' : 'bg-black/20 text-zinc-400 border-transparent hover:text-white hover:bg-white/5'}`}>
+                                    {activeImage.vignette.enabled ? 'On' : 'Off'}
                                 </button>
-                                <button onClick={handleApplyToAll} className="px-2 py-1 rounded border border-transparent hover:border-white/10 bg-zinc-800/50 text-zinc-500 hover:text-zinc-300 transition-colors">
-                                    <span className="text-[10px] font-mono font-bold">ALL</span>
+                                <button onClick={handleApplyToAll} className="px-3 py-1.5 rounded-md border border-transparent hover:border-white/10 bg-black/20 text-zinc-400 hover:text-white transition-colors">
+                                    <span className="text-xs font-medium">Apply All</span>
                                 </button>
                              </div>
 
                              {/* --- PRESETS --- */}
-                             <div className="flex items-center gap-1 border-l border-r border-white/10 px-4 mx-2">
-                                <span className="text-[9px] font-mono text-zinc-500 uppercase mr-1">PRESET</span>
+                             <div className="flex items-center gap-2 border-l border-r border-white/10 px-4 mx-2">
+                                <span className="text-xs font-medium text-zinc-400 mr-1">Preset</span>
                                 {vignettePresets.map((_, idx) => {
                                     // Highlight based on active slot
                                     const isActive = activePresetIndex === idx;
@@ -1254,10 +1290,10 @@ export const MosaicEditor: React.FC = () => {
                                             key={idx}
                                             onClick={() => handlePresetClick(idx)}
                                             className={`
-                                                w-6 h-6 flex items-center justify-center text-[10px] font-mono font-bold rounded transition-all border
+                                                w-7 h-7 flex items-center justify-center text-xs font-medium rounded-md transition-all border
                                                 ${isActive 
-                                                    ? 'bg-accent border-accent text-white shadow-[0_0_10px_rgba(59,130,246,0.5)] scale-110' 
-                                                    : 'bg-zinc-800 text-zinc-400 border-white/5 hover:bg-zinc-700 hover:text-white'
+                                                    ? 'bg-white/10 border-white/20 text-white shadow-sm scale-105' 
+                                                    : 'bg-black/20 text-zinc-400 border-white/5 hover:bg-white/5 hover:text-white'
                                                 }
                                             `}
                                             title={`Preset ${idx + 1} (Auto-saves changes)`}
@@ -1269,16 +1305,16 @@ export const MosaicEditor: React.FC = () => {
                              </div>
                              {/* --- END PRESETS --- */}
 
-                             <input type="color" value={activeImage.vignette.color} onChange={(e) => updateVignette({ color: e.target.value })} className="w-8 h-8 rounded bg-transparent border-none cursor-pointer" />
+                             <input type="color" value={activeImage.vignette.color} onChange={(e) => updateVignette({ color: e.target.value })} className="w-7 h-7 rounded-md bg-transparent border-none cursor-pointer" />
                              {[
                                 { l: 'Opacity', k: 'opacity', min: 0, max: 1, step: 0.1, val: activeImage.vignette.opacity },
                                 { l: 'Range', k: 'range', min: 0, max: 120, step: 1, val: activeImage.vignette.range },
                                 { l: 'Softness', k: 'softness', min: 0, max: 100, step: 1, val: activeImage.vignette.softness },
-                                { l: 'Roundness', k: 'cornerRadius', min: 0, max: 100, step: 1, val: activeImage.vignette.cornerRadius }
+                                { l: 'Round', k: 'cornerRadius', min: 0, max: 100, step: 1, val: activeImage.vignette.cornerRadius }
                              ].map(s => (
-                                <div key={s.l} className="flex flex-col justify-center gap-1 w-24">
-                                    <label className="text-[10px] font-mono text-zinc-500 leading-none flex justify-between">{s.l} <span>{Math.round(s.k === 'opacity' ? s.val * 100 : s.val)}{s.k === 'opacity' || s.k === 'range' ? '%' : ''}</span></label>
-                                    <input type="range" min={s.min} max={s.max} step={s.step} value={s.val} onChange={(e) => updateVignette({ [s.k]: parseFloat(e.target.value) })} className="h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer" />
+                                <div key={s.l} className="flex flex-col justify-center gap-1.5 w-24">
+                                    <label className="text-[10px] font-medium text-zinc-400 leading-none flex justify-between">{s.l} <span className="text-zinc-300">{Math.round(s.k === 'opacity' ? s.val * 100 : s.val)}{s.k === 'opacity' || s.k === 'range' ? '%' : ''}</span></label>
+                                    <input type="range" min={s.min} max={s.max} step={s.step} value={s.val} onChange={(e) => updateVignette({ [s.k]: parseFloat(e.target.value) })} className="h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-white" />
                                 </div>
                              ))}
                         </div>
@@ -1287,8 +1323,8 @@ export const MosaicEditor: React.FC = () => {
                     {activeImage && activeTab === 'watermark' && (
                         <div className="flex items-center gap-4 pl-4 border-l border-white/10 animate-in fade-in slide-in-from-left-2 duration-200">
                              <div className="flex items-center gap-2">
-                                <button onClick={() => setWatermark({...watermark, enabled: !watermark.enabled})} className={`text-xs font-mono font-bold px-3 py-1 rounded border transition-colors ${watermark.enabled ? 'bg-accent/20 text-accent border-accent/50' : 'bg-zinc-800 text-zinc-500 border-transparent hover:text-zinc-300'}`}>
-                                    {watermark.enabled ? 'ON' : 'OFF'}
+                                <button onClick={() => setWatermark({...watermark, enabled: !watermark.enabled})} className={`text-xs font-medium px-3 py-1.5 rounded-md border transition-colors ${watermark.enabled ? 'bg-white/10 text-white border-white/20' : 'bg-black/20 text-zinc-400 border-transparent hover:text-white hover:bg-white/5'}`}>
+                                    {watermark.enabled ? 'On' : 'Off'}
                                 </button>
                              </div>
 
@@ -1298,25 +1334,25 @@ export const MosaicEditor: React.FC = () => {
                                     value={watermark.text}
                                     onChange={(e) => setWatermark({...watermark, text: e.target.value})}
                                     placeholder="Enter text..."
-                                    className="bg-zinc-900 border border-white/10 rounded px-3 py-1.5 text-xs text-white font-mono w-32 focus:border-accent outline-none"
+                                    className="bg-black/20 border border-white/10 rounded-md px-3 py-1.5 text-xs text-white w-32 focus:border-white/30 outline-none transition-colors"
                                  />
                                  
-                                 <div className="flex items-center gap-1 border-l border-white/5 pl-4">
+                                 <div className="flex items-center gap-1.5 border-l border-white/10 pl-4">
                                      <button 
                                         onClick={() => setWatermark({...watermark, icon: watermark.icon === 'x' ? 'none' : 'x'})}
-                                        className={`w-8 h-8 rounded flex items-center justify-center border transition-all ${watermark.icon === 'x' ? 'bg-white border-white text-black' : 'bg-zinc-800 border-white/5 text-zinc-500 hover:text-zinc-300'}`}
+                                        className={`w-7 h-7 rounded-md flex items-center justify-center border transition-all ${watermark.icon === 'x' ? 'bg-white border-white text-black' : 'bg-black/20 border-white/5 text-zinc-400 hover:text-white hover:bg-white/5'}`}
                                         title="X (Twitter)"
                                      >
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                                           <path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z" />
                                         </svg>
                                      </button>
                                      <button 
                                         onClick={() => setWatermark({...watermark, icon: watermark.icon === 'patreon' ? 'none' : 'patreon'})}
-                                        className={`w-8 h-8 rounded flex items-center justify-center border transition-all ${watermark.icon === 'patreon' ? 'bg-[#FF424D] border-[#FF424D] text-white' : 'bg-zinc-800 border-white/5 text-zinc-500 hover:text-zinc-300'}`}
+                                        className={`w-7 h-7 rounded-md flex items-center justify-center border transition-all ${watermark.icon === 'patreon' ? 'bg-[#FF424D] border-[#FF424D] text-white' : 'bg-black/20 border-white/5 text-zinc-400 hover:text-white hover:bg-white/5'}`}
                                         title="Patreon"
                                      >
-                                        <svg width="14" height="14" viewBox="0 0 512 512" fill="currentColor" fillRule="evenodd" clipRule="evenodd" strokeLinejoin="round" strokeMiterlimit="2">
+                                        <svg width="12" height="12" viewBox="0 0 512 512" fill="currentColor" fillRule="evenodd" clipRule="evenodd" strokeLinejoin="round" strokeMiterlimit="2">
                                             <g transform="matrix(.47407 0 0 .47407 .383 .422)">
                                                 <clipPath id="prefix__a"><path d="M0 0h1080v1080H0z"/></clipPath>
                                                 <g clipPath="url(#prefix__a)">
@@ -1327,17 +1363,17 @@ export const MosaicEditor: React.FC = () => {
                                      </button>
                                  </div>
 
-                                 <div className="flex items-center gap-4 border-l border-white/5 pl-4">
-                                     <div className="flex flex-col gap-1 w-20">
-                                        <label className="text-[9px] font-mono text-zinc-500">OPACITY</label>
-                                        <input type="range" min="0" max="1" step="0.1" value={watermark.opacity} onChange={(e) => setWatermark({...watermark, opacity: parseFloat(e.target.value)})} className="h-1.5 w-full bg-zinc-700 rounded-lg appearance-none cursor-pointer" />
+                                 <div className="flex items-center gap-4 border-l border-white/10 pl-4">
+                                     <div className="flex flex-col gap-1.5 w-20">
+                                        <label className="text-[10px] font-medium text-zinc-400">Opacity</label>
+                                        <input type="range" min="0" max="1" step="0.1" value={watermark.opacity} onChange={(e) => setWatermark({...watermark, opacity: parseFloat(e.target.value)})} className="h-1.5 w-full bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-white" />
                                      </div>
-                                     <div className="flex flex-col gap-1 w-20">
-                                        <label className="text-[9px] font-mono text-zinc-500">SIZE</label>
-                                        <input type="range" min="0.5" max="3" step="0.1" value={watermark.size} onChange={(e) => setWatermark({...watermark, size: parseFloat(e.target.value)})} className="h-1.5 w-full bg-zinc-700 rounded-lg appearance-none cursor-pointer" />
+                                     <div className="flex flex-col gap-1.5 w-20">
+                                        <label className="text-[10px] font-medium text-zinc-400">Size</label>
+                                        <input type="range" min="0.5" max="3" step="0.1" value={watermark.size} onChange={(e) => setWatermark({...watermark, size: parseFloat(e.target.value)})} className="h-1.5 w-full bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-white" />
                                      </div>
-                                     <div className="flex flex-col gap-1 w-20">
-                                        <label className="text-[9px] font-mono text-zinc-500">LOGO SIZE</label>
+                                     <div className="flex flex-col gap-1.5 w-20">
+                                        <label className="text-[10px] font-medium text-zinc-400">Logo Size</label>
                                         <input 
                                             type="range" 
                                             min="0.5" 
@@ -1346,7 +1382,7 @@ export const MosaicEditor: React.FC = () => {
                                             value={watermark.iconScale ?? 1} 
                                             onChange={(e) => setWatermark({...watermark, iconScale: parseFloat(e.target.value)})} 
                                             disabled={watermark.icon === 'none'}
-                                            className={`h-1.5 w-full bg-zinc-700 rounded-lg appearance-none cursor-pointer ${watermark.icon === 'none' ? 'opacity-30' : ''}`} 
+                                            className={`h-1.5 w-full bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-white ${watermark.icon === 'none' ? 'opacity-30' : ''}`} 
                                         />
                                      </div>
                                  </div>
@@ -1356,16 +1392,16 @@ export const MosaicEditor: React.FC = () => {
 
                     {activeImage && activeTab === 'export' && (
                         <div className="flex items-center gap-6 pl-4 border-l border-white/10 animate-in fade-in slide-in-from-left-2 duration-200">
-                             <div className="flex flex-col gap-1">
-                                <label className="text-[10px] font-mono text-zinc-500">Zip Filename</label>
-                                <input type="text" value={exportSettings.zipFilename} onChange={(e) => setExportSettings(s => ({...s, zipFilename: e.target.value}))} className="bg-zinc-800 border border-white/10 rounded px-2 py-1 text-xs text-white w-32 outline-none" />
+                             <div className="flex flex-col gap-1.5">
+                                <label className="text-[10px] font-medium text-zinc-400">Zip Filename</label>
+                                <input type="text" value={exportSettings.zipFilename} onChange={(e) => setExportSettings(s => ({...s, zipFilename: e.target.value}))} className="bg-black/20 border border-white/10 rounded-md px-3 py-1.5 text-xs text-white w-40 outline-none focus:border-white/30 transition-colors" />
                              </div>
                              
-                             <button onClick={() => setShowExportModal(true)} className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${hasPassword || hasTextContent ? 'bg-accent/20 border-accent/50 text-accent' : 'bg-zinc-800 border-white/10 text-zinc-400 hover:text-zinc-200'}`}>
+                             <button onClick={() => setShowExportModal(true)} className={`flex items-center gap-2 px-3 py-1.5 rounded-md border transition-all ${hasPassword || hasTextContent ? 'bg-white/10 border-white/20 text-white' : 'bg-black/20 border-white/5 text-zinc-400 hover:text-white hover:bg-white/5'}`}>
                                 <Settings size={16} />
-                                <div className="flex flex-col items-start leading-none">
-                                    <span className="text-[10px] font-bold font-mono">SETTINGS</span>
-                                    <span className="text-[9px] opacity-70">
+                                <div className="flex flex-col items-start leading-tight">
+                                    <span className="text-xs font-medium">Settings</span>
+                                    <span className="text-[10px] opacity-70">
                                         {hasPassword && hasTextContent ? 'Encrypted + Info' : 
                                          hasPassword ? 'Encrypted' : 
                                          hasTextContent ? 'Info Included' : 'Default'}
@@ -1376,18 +1412,18 @@ export const MosaicEditor: React.FC = () => {
                     )}
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <button onClick={handleClearAllImages} disabled={images.length === 0} className="text-zinc-400 hover:text-red-400 p-2 rounded-lg transition-colors disabled:opacity-30" title="Clear Workspace"><Trash2 size={18} /></button>
-                    <div className="w-px h-8 bg-white/10 mx-2" />
-                    <button id="mosaic-undo-btn" onClick={handleUndo} disabled={!activeImage || activeImage.censorPaths.length === 0} className="p-2 text-zinc-400 hover:text-white hover:bg-white/10 rounded-lg disabled:opacity-30 transition-colors"><Undo2 size={18} /></button>
-                    <button onClick={handleClear} disabled={!activeImage || activeImage.censorPaths.length === 0} className="p-2 text-zinc-400 hover:text-red-400 hover:bg-red-900/20 rounded-lg disabled:opacity-30 transition-colors"><Eraser size={18} /></button>
-                    <div className="w-px h-8 bg-white/10 mx-2" />
-                    <button onClick={handleDownloadSingle} disabled={!activeImage} className="bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white border border-white/10 px-3 py-2 rounded-lg text-sm font-bold font-mono flex items-center gap-2 transition-all disabled:opacity-50">
-                        <FileDown size={16} /> SAVE
+                <div className="flex items-center gap-2">
+                    <button onClick={handleClearAllImages} disabled={images.length === 0} className="text-zinc-400 hover:text-red-400 p-2 rounded-md transition-colors disabled:opacity-30" title="Clear Workspace"><Trash2 size={18} /></button>
+                    <div className="w-px h-6 bg-white/10 mx-2" />
+                    <button id="mosaic-undo-btn" onClick={handleUndo} disabled={!activeImage || activeImage.censorPaths.length === 0} className="p-2 text-zinc-400 hover:text-white hover:bg-white/10 rounded-md disabled:opacity-30 transition-colors"><Undo2 size={18} /></button>
+                    <button onClick={handleClear} disabled={!activeImage || activeImage.censorPaths.length === 0} className="p-2 text-zinc-400 hover:text-red-400 hover:bg-red-500/20 rounded-md disabled:opacity-30 transition-colors"><Eraser size={18} /></button>
+                    <div className="w-px h-6 bg-white/10 mx-2" />
+                    <button onClick={handleDownloadSingle} disabled={!activeImage} className="bg-white/10 text-white hover:bg-white/20 border border-white/10 px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all disabled:opacity-50">
+                        <FileDown size={16} /> Save
                     </button>
-                    <button onClick={handleDownloadZip} disabled={images.length === 0 || isExporting} className="bg-accent/10 text-accent hover:bg-accent hover:text-white border border-accent/20 px-5 py-2 rounded-lg text-sm font-bold font-mono flex items-center gap-2 transition-all disabled:opacity-50">
+                    <button onClick={handleDownloadZip} disabled={images.length === 0 || isExporting} className="bg-white text-black hover:bg-zinc-200 px-5 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-all disabled:opacity-50">
                         {isExporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} 
-                        {isExporting ? 'ZIPPING...' : 'ZIP'}
+                        {isExporting ? 'Zipping...' : 'Zip'}
                     </button>
                 </div>
             </div>
@@ -1399,12 +1435,12 @@ export const MosaicEditor: React.FC = () => {
                         const hasEdits = img.censorPaths.length > 0 || img.vignette.enabled;
                         const isActive = activeId === img.id;
                         return (
-                            <div key={img.id} className={`relative shrink-0 group w-28 h-28 transition-transform duration-300 ${isActive ? 'scale-105 z-10' : ''}`}>
+                            <div key={img.id} className={`relative shrink-0 group w-24 h-24 transition-transform duration-300 ${isActive ? 'scale-105 z-10' : ''}`}>
                                 <button
                                     onClick={() => handleSelectImage(img.id)}
                                     className={`
                                         w-full h-full rounded-xl overflow-hidden border-2 transition-all relative
-                                        ${isActive ? 'border-accent shadow-lg shadow-blue-500/20' : 'border-white/5 grayscale opacity-60 hover:opacity-100 hover:grayscale-0'}
+                                        ${isActive ? 'border-white/50 shadow-lg' : 'border-white/5 opacity-60 hover:opacity-100 hover:border-white/20'}
                                     `}
                                 >
                                     <img src={img.url} className="w-full h-full object-cover" alt="thumb" />
@@ -1415,16 +1451,16 @@ export const MosaicEditor: React.FC = () => {
                                 
                                 {/* Indicator inside the frame area but outside the dimmed button */}
                                 {hasEdits && (
-                                    <div className="absolute bottom-2 left-2 bg-accent text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-lg border border-white/20 flex items-center gap-1 z-20 pointer-events-none backdrop-blur-sm">
-                                        <CheckCheck size={10} strokeWidth={3} />
-                                        <span className="font-mono tracking-tight">EDITED</span>
+                                    <div className="absolute bottom-2 left-2 bg-white/20 backdrop-blur-md text-white text-[9px] font-medium px-1.5 py-0.5 rounded border border-white/10 flex items-center gap-1 z-20 pointer-events-none">
+                                        <CheckCheck size={10} strokeWidth={2.5} />
+                                        <span className="tracking-tight">Edited</span>
                                     </div>
                                 )}
 
                                 {/* Delete button positioned visually inside the frame but technically on top */}
                                 <button 
                                     onClick={(e) => removeImage(img.id, e)}
-                                    className="absolute top-2 right-2 p-1.5 bg-black/60 text-white/80 rounded-md opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white backdrop-blur-sm shadow-sm hover:scale-110 z-20"
+                                    className="absolute top-2 right-2 p-1.5 bg-black/40 text-white/80 rounded-md opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500/80 hover:text-white backdrop-blur-md border border-white/10 shadow-sm hover:scale-110 z-20"
                                     title="Remove Image"
                                 >
                                     <Trash2 size={14} />
@@ -1436,12 +1472,12 @@ export const MosaicEditor: React.FC = () => {
                     {/* Add Button Tile */}
                     <button 
                         onClick={() => fileInputRef.current?.click()}
-                        className="relative shrink-0 w-28 h-28 rounded-xl border-2 border-dashed border-white/10 hover:border-accent/50 hover:bg-white/5 flex flex-col items-center justify-center gap-2 transition-all text-zinc-500 hover:text-accent group"
+                        className="relative shrink-0 w-24 h-24 rounded-xl border-2 border-dashed border-white/10 hover:border-white/30 hover:bg-white/5 flex flex-col items-center justify-center gap-2 transition-all text-zinc-400 hover:text-white group"
                     >
-                        <div className="p-3 bg-zinc-800/50 rounded-full group-hover:bg-accent/10 transition-colors">
-                                <Upload size={20} />
+                        <div className="p-2 bg-black/20 rounded-full group-hover:bg-white/10 transition-colors">
+                                <Upload size={18} />
                         </div>
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider">ADD</span>
+                        <span className="text-[10px] font-medium tracking-wide">Add</span>
                     </button>
                 </div>
             </div>
@@ -1449,42 +1485,42 @@ export const MosaicEditor: React.FC = () => {
             {/* Archive Configuration Modal */}
             {showExportModal && createPortal(
                 <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={() => setShowExportModal(false)}>
-                    <div className="bg-zinc-900 border border-white/10 rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-between p-4 border-b border-white/10 bg-zinc-900/50">
-                            <h3 className="font-mono font-bold text-white flex items-center gap-2"><Settings size={18} className="text-accent" /> Archive Configuration</h3>
+                    <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between p-5 border-b border-white/5 bg-white/5">
+                            <h3 className="font-medium text-white flex items-center gap-2"><Settings size={18} className="text-zinc-400" /> Archive Configuration</h3>
                             <button onClick={() => setShowExportModal(false)} className="text-zinc-500 hover:text-white transition-colors"><X size={18}/></button>
                         </div>
-                        <div className="p-5 flex flex-col gap-4">
+                        <div className="p-6 flex flex-col gap-6">
                             
                             {/* Metadata Section */}
                             <div className="flex flex-col gap-4">
-                                <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-mono uppercase tracking-widest">
+                                <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-medium uppercase tracking-widest">
                                     <FileText size={12} /> Metadata File
                                 </div>
                                 <div className="flex flex-col gap-2">
-                                    <label className="text-xs font-mono text-zinc-400">Filename</label>
-                                    <input type="text" value={exportSettings.textFilename} onChange={(e) => setExportSettings(s => ({...s, textFilename: e.target.value}))} placeholder="info.txt" className="bg-zinc-950 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none font-mono focus:border-white/20 transition-colors" />
+                                    <label className="text-xs font-medium text-zinc-400">Filename</label>
+                                    <input type="text" value={exportSettings.textFilename} onChange={(e) => setExportSettings(s => ({...s, textFilename: e.target.value}))} placeholder="info.txt" className="bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-white/30 transition-colors" />
                                 </div>
                                 <div className="flex flex-col gap-2">
-                                    <label className="text-xs font-mono text-zinc-400">Content</label>
-                                    <textarea value={exportSettings.textContent} onChange={(e) => setExportSettings(s => ({...s, textContent: e.target.value}))} placeholder="Type your text here..." className="bg-zinc-950 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-accent outline-none font-mono min-h-[120px] resize-y transition-colors" />
+                                    <label className="text-xs font-medium text-zinc-400">Content</label>
+                                    <textarea value={exportSettings.textContent} onChange={(e) => setExportSettings(s => ({...s, textContent: e.target.value}))} placeholder="Type your text here..." className="bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:border-white/30 outline-none min-h-[120px] resize-y transition-colors" />
                                 </div>
                             </div>
 
-                            <div className="h-px bg-white/5 my-2" />
+                            <div className="h-px bg-white/5" />
 
                             {/* Encryption Section */}
                             <div className="flex flex-col gap-4">
-                                <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-mono uppercase tracking-widest">
+                                <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-medium uppercase tracking-widest">
                                     <ShieldCheck size={12} /> Encryption
                                 </div>
-                                <div className="bg-zinc-950/50 p-3 rounded-lg border border-white/5 flex flex-col gap-2">
-                                    <label className="text-xs font-mono text-zinc-400 flex justify-between">
+                                <div className="bg-black/20 p-4 rounded-xl border border-white/5 flex flex-col gap-3">
+                                    <label className="text-xs font-medium text-zinc-400 flex justify-between">
                                         Zip Password
-                                        <span className="text-[10px] text-zinc-600">Standard ZipCrypto</span>
+                                        <span className="text-[10px] text-zinc-500">Standard ZipCrypto</span>
                                     </label>
                                     <div className="flex items-center gap-2">
-                                        <div className="bg-zinc-800 p-2 rounded text-zinc-400">
+                                        <div className="bg-white/5 p-2 rounded-md text-zinc-400 border border-white/5">
                                             <Lock size={14} />
                                         </div>
                                         <input 
@@ -1492,18 +1528,18 @@ export const MosaicEditor: React.FC = () => {
                                             value={exportSettings.password} 
                                             onChange={(e) => setExportSettings(s => ({...s, password: e.target.value}))} 
                                             placeholder="Leave empty for no password" 
-                                            className="flex-1 bg-zinc-900 border border-white/10 rounded px-3 py-2 text-sm text-white outline-none font-mono focus:border-accent/50 transition-colors" 
+                                            className="flex-1 bg-black/20 border border-white/10 rounded-md px-3 py-2 text-sm text-white outline-none focus:border-white/30 transition-colors" 
                                         />
                                     </div>
-                                    <p className="text-[10px] text-zinc-600 leading-tight">
+                                    <p className="text-[10px] text-zinc-500 leading-tight">
                                         Note: Password applies only to image files. Metadata file remains unencrypted.
                                     </p>
                                 </div>
                             </div>
 
                         </div>
-                        <div className="p-4 border-t border-white/10 bg-zinc-900/50 flex justify-end">
-                            <button onClick={() => setShowExportModal(false)} className="bg-white text-black hover:bg-zinc-200 px-6 py-2 rounded-lg text-sm font-bold font-mono transition-colors">DONE</button>
+                        <div className="p-5 border-t border-white/5 bg-white/5 flex justify-end">
+                            <button onClick={() => setShowExportModal(false)} className="bg-white text-black hover:bg-zinc-200 px-6 py-2 rounded-lg text-sm font-medium transition-colors">Done</button>
                         </div>
                     </div>
                 </div>,

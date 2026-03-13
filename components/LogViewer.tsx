@@ -78,18 +78,17 @@ export const LogViewer: React.FC<LogViewerProps> = ({ logs, status, onClick, onC
             relative z-10 flex items-center gap-4 transition-all duration-500 transform w-full
             ${isIdle ? 'opacity-0 translate-y-8 scale-95' : 'opacity-100 translate-y-0 scale-100'}
         `}>
-             {/* Icon Box */}
+            {/* Icon Box */}
             <div className={`
                 shrink-0 w-10 h-10 rounded-xl flex items-center justify-center border transition-all duration-500
-                ${status === AppStatus.READY ? 'bg-emerald-500/20 border-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.3)]' : 
-                  status === AppStatus.ERROR ? 'bg-red-500/20 border-red-500/30' :
-                  'bg-white/10 border-white/10'}
+                ${status === AppStatus.READY ? 'bg-emerald-500/10 border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 
+                  status === AppStatus.ERROR ? 'bg-red-500/10 border-red-500/20' :
+                  'bg-white/5 border-white/10'}
             `}>
                 <StatusIcon 
                     size={20} 
                     className={`
                         ${currentStatus.color} 
-                        ${isProcessing ? 'animate-spin' : ''}
                     `} 
                 />
             </div>
@@ -97,13 +96,13 @@ export const LogViewer: React.FC<LogViewerProps> = ({ logs, status, onClick, onC
             {/* Text Content */}
             <div className="flex-1 min-w-0 flex flex-col justify-center">
                 <div key={status + "-title"} className="flex items-center justify-between animate-in fade-in slide-in-from-bottom-1 duration-300">
-                     <span className={`text-xs font-bold uppercase tracking-wider ${currentStatus.color}`}>
+                     <span className={`text-xs font-medium uppercase tracking-wider ${currentStatus.color}`}>
                         {currentStatus.text}
                      </span>
                      {status === AppStatus.READY && (
-                        <div className="flex items-center gap-1.5 px-3 py-1 bg-white/10 hover:bg-white/20 border border-white/10 rounded-full transition-all group-hover:border-emerald-500/40">
-                             <RefreshCcw size={12} className="text-zinc-300 group-hover:text-emerald-400 transition-colors" />
-                             <span className="text-[11px] font-semibold text-zinc-300 group-hover:text-emerald-100 transition-colors">Retry</span>
+                        <div className="flex items-center gap-1.5 px-3 py-1 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-all group-hover:border-emerald-500/30">
+                             <RefreshCcw size={12} className="text-zinc-400 group-hover:text-emerald-400 transition-colors" />
+                             <span className="text-[11px] font-medium text-zinc-400 group-hover:text-emerald-100 transition-colors">Retry</span>
                         </div>
                      )}
                 </div>
@@ -111,12 +110,12 @@ export const LogViewer: React.FC<LogViewerProps> = ({ logs, status, onClick, onC
                 <div className="mt-1 relative">
                      {lastLog ? (
                         <div key={lastLog.id} className="animate-in fade-in duration-300">
-                            <p className="text-xs text-zinc-400 font-medium leading-relaxed break-words whitespace-normal text-left">
+                            <p className="text-xs text-zinc-400 leading-relaxed break-words whitespace-normal text-left">
                                 {lastLog.message}
                             </p>
                         </div>
                      ) : (
-                        <p className="text-xs text-zinc-500 font-medium text-left">Initializing...</p>
+                        <p className="text-xs text-zinc-500 text-left">Initializing...</p>
                      )}
                 </div>
             </div>
