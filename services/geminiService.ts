@@ -105,6 +105,67 @@ function splitPolygon(poly: Poly, isVertical: boolean): { poly1: Poly, poly2: Po
     return { poly1, poly2 };
 }
 
+function fixTJunctions(regions: Poly[]) {
+    const eps = 0.1; // 0.1% tolerance
+    
+    // Collect all unique vertices
+    const vertices: Point[] = [];
+    for (const poly of regions) {
+        for (const p of poly) {
+            if (!vertices.some(v => Math.abs(v.x - p.x) < eps && Math.abs(v.y - p.y) < eps)) {
+                vertices.push(p);
+            }
+        }
+    }
+
+    // For each polygon, check each edge against all vertices
+    for (let i = 0; i < regions.length; i++) {
+        let poly = regions[i];
+        let newPoly: Poly = [];
+        
+        for (let j = 0; j < poly.length; j++) {
+            let p1 = poly[j];
+            let p2 = poly[(j + 1) % poly.length];
+            newPoly.push(p1);
+            
+            // Find all vertices that lie on the segment p1-p2
+            let pointsOnEdge: Point[] = [];
+            for (const v of vertices) {
+                if ((Math.abs(v.x - p1.x) < eps && Math.abs(v.y - p1.y) < eps) ||
+                    (Math.abs(v.x - p2.x) < eps && Math.abs(v.y - p2.y) < eps)) {
+                    continue;
+                }
+                
+                let l2 = (p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2;
+                if (l2 === 0) continue;
+                
+                let t = ((v.x - p1.x) * (p2.x - p1.x) + (v.y - p1.y) * (p2.y - p1.y)) / l2;
+                
+                if (t > eps/100 && t < 1 - eps/100) {
+                    let projX = p1.x + t * (p2.x - p1.x);
+                    let projY = p1.y + t * (p2.y - p1.y);
+                    
+                    let dist2 = (v.x - projX) ** 2 + (v.y - projY) ** 2;
+                    
+                    if (dist2 < eps * eps) {
+                        pointsOnEdge.push(v);
+                    }
+                }
+            }
+            
+            // Sort pointsOnEdge by distance from p1
+            pointsOnEdge.sort((a, b) => {
+                let distA = (a.x - p1.x) ** 2 + (a.y - p1.y) ** 2;
+                let distB = (b.x - p1.x) ** 2 + (b.y - p1.y) ** 2;
+                return distA - distB;
+            });
+            
+            newPoly.push(...pointsOnEdge);
+        }
+        regions[i] = newPoly;
+    }
+}
+
 export const generateCollageLayout = async (imageCount: number, aspectRatio: string, onProgress?: (msg: string) => void): Promise<CollageLayout> => {
     if (onProgress) onProgress("Generating layout...");
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -145,6 +206,8 @@ export const generateCollageLayout = async (imageCount: number, aspectRatio: str
         regions.push(poly1);
         regions.push(poly2);
     }
+
+    fixTJunctions(regions);
 
     const layoutRegions = regions.map((poly, idx) => {
         const clipPath = `polygon(${poly.map(p => `${p.x.toFixed(2)}% ${p.y.toFixed(2)}%`).join(', ')})`;

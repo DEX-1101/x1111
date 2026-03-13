@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { MosaicImageItem, CensorPath, Point, VignetteSettings } from '../types';
-import { Upload, X, Download, Undo2, Eraser, Loader2, ImagePlus, Brush, ZoomIn, ZoomOut, Move, Grid3X3, Square, Aperture, Sliders, CheckCheck, RotateCcw, RotateCw, FileText, Lock, FileArchive, Trash2, Settings, ShieldCheck, FileDown } from 'lucide-react';
+import { MosaicImageItem, CensorPath, Point, VignetteSettings, WatermarkSettings } from '../types';
+import { Upload, X, Download, Undo2, Eraser, Loader2, ImagePlus, Brush, ZoomIn, ZoomOut, Move, Grid3X3, Square, Aperture, Sliders, CheckCheck, RotateCcw, RotateCw, FileText, Lock, FileArchive, Trash2, Settings, ShieldCheck, FileDown, Type, Sparkles } from 'lucide-react';
 import { BlobReader, BlobWriter, TextReader, ZipWriter } from "@zip.js/zip.js";
 
 // --- IndexedDB Helper for Large Files ---
@@ -162,6 +162,59 @@ const drawInfiniteGrid = (ctx: CanvasRenderingContext2D, width: number, height: 
     ctx.restore();
 };
 
+const renderWatermarkSync = (ctx: CanvasRenderingContext2D, width: number, height: number, watermark: WatermarkSettings, watermarkImg: HTMLImageElement | null) => {
+    if (!watermark.enabled || (!watermark.text && watermark.icon === 'none') || watermark.opacity <= 0) return;
+
+    const wx = (watermark.x / 100) * width;
+    const wy = (watermark.y / 100) * height;
+    
+    ctx.save();
+    ctx.translate(wx, wy);
+    
+    ctx.globalAlpha = watermark.opacity; 
+    
+    ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+    ctx.shadowBlur = 2;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    
+    ctx.fillStyle = '#FFFFFF';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    const wFontSize = 16 * watermark.size;
+    
+    ctx.font = `bold ${wFontSize}px "Segoe UI", sans-serif`;
+
+    if (watermark.icon !== 'none' && watermarkImg) {
+         const iconScale = watermark.iconScale ?? 1;
+         const iconSize = wFontSize * 1.5 * iconScale;
+         const iconHalf = iconSize / 2;
+         
+         let iconX = 0;
+         if (watermark.text) {
+             const textMetrics = ctx.measureText(watermark.text);
+             const gap = wFontSize * 0.5;
+             const totalWidth = iconSize + gap + textMetrics.width;
+             const groupLeft = -totalWidth / 2;
+             iconX = groupLeft + iconHalf;
+             const textLeft = iconX + iconHalf + gap;
+             
+             ctx.textAlign = 'left';
+             ctx.fillText(watermark.text, textLeft, 0);
+         } else {
+             iconX = 0;
+         }
+         
+         ctx.drawImage(watermarkImg, iconX - iconHalf, -iconHalf, iconSize, iconSize);
+         
+    } else if (watermark.text) {
+         ctx.fillText(watermark.text, 0, 0);
+    }
+    
+    ctx.restore();
+};
+
 export const MosaicEditor: React.FC = () => {
   const [images, setImages] = useState<MosaicImageItem[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -170,10 +223,36 @@ export const MosaicEditor: React.FC = () => {
   const [showExportModal, setShowExportModal] = useState(false);
   
   // Tools
-  const [activeTab, setActiveTab] = useState<'tools' | 'effects' | 'export'>('tools');
+  const [activeTab, setActiveTab] = useState<'tools' | 'effects' | 'export' | 'watermark'>('tools');
   const [brushSize, setBrushSize] = useState(50);
   const [brushType, setBrushType] = useState<'mosaic' | 'white'>('mosaic');
   const [mosaicScale, setMosaicScale] = useState(15); // 15 = 1.5% of min dimension
+  
+  // Watermark State
+  const [watermark, setWatermark] = useState<WatermarkSettings>({
+    enabled: false,
+    text: '',
+    icon: 'none',
+    x: 50,
+    y: 50,
+    opacity: 0.5,
+    size: 1,
+    iconScale: 1,
+  });
+  const [watermarkImg, setWatermarkImg] = useState<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+      if (watermark.icon === 'none') {
+          setWatermarkImg(null);
+          return;
+      }
+      const patreonSvg = `data:image/svg+xml;base64,${btoa('<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" fill-rule="evenodd" clip-rule="evenodd" stroke-linejoin="round" stroke-miterlimit="2"><g transform="matrix(.47407 0 0 .47407 .383 .422)"><clipPath id="prefix__a"><path d="M0 0h1080v1080H0z"/></clipPath><g clip-path="url(#prefix__a)" fill="white"><path d="M1033.05 324.45c-.19-137.9-107.59-250.92-233.6-291.7-156.48-50.64-362.86-43.3-512.28 27.2-181.1 85.46-237.99 272.66-240.11 459.36-1.74 153.5 13.58 557.79 241.62 560.67 169.44 2.15 194.67-216.18 273.07-321.33 55.78-74.81 127.6-95.94 216.01-117.82 151.95-37.61 255.51-157.53 255.29-316.38z" fillRule="nonzero"/></g></g></svg>')}`;
+      const xSvg = `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z" /></svg>')}`;
+      
+      const img = new Image();
+      img.src = watermark.icon === 'patreon' ? patreonSvg : xSvg;
+      img.onload = () => setWatermarkImg(img);
+  }, [watermark.icon]);
   
   // Last used effect settings (persisted)
   const [defaultVignetteSettings, setDefaultVignetteSettings] = useState<VignetteSettings>(DEFAULT_VIGNETTE);
@@ -257,6 +336,7 @@ export const MosaicEditor: React.FC = () => {
                 if (s.lastVignette) setDefaultVignetteSettings(s.lastVignette);
                 if (s.vignettePresets) setVignettePresets(s.vignettePresets);
                 if (typeof s.activePresetIndex === 'number') setActivePresetIndex(s.activePresetIndex);
+                if (s.watermark) setWatermark(s.watermark);
             }
          } catch(e) {
              console.warn("Failed to load settings", e);
@@ -297,7 +377,8 @@ export const MosaicEditor: React.FC = () => {
             activeId,
             lastVignette: defaultVignetteSettings,
             vignettePresets,
-            activePresetIndex
+            activePresetIndex,
+            watermark
         }));
 
         // Save Images to IDB
@@ -305,7 +386,7 @@ export const MosaicEditor: React.FC = () => {
     }, 1000);
 
     return () => clearTimeout(t);
-  }, [images, brushSize, brushType, mosaicScale, exportSettings, activeTab, isRestored, activeId, defaultVignetteSettings, vignettePresets, activePresetIndex]);
+  }, [images, brushSize, brushType, mosaicScale, exportSettings, activeTab, isRestored, activeId, defaultVignetteSettings, vignettePresets, activePresetIndex, watermark]);
 
 
   // --- Image Handling ---
@@ -687,9 +768,12 @@ export const MosaicEditor: React.FC = () => {
     // 3. Draw Vignette
     renderVignette(ctx, img.naturalWidth, img.naturalHeight, activeImage.vignette);
 
+    // 4. Draw Watermark
+    renderWatermarkSync(ctx, img.naturalWidth, img.naturalHeight, watermark, watermarkImg);
+
     ctx.restore();
 
-  }, [activeImage, currentPath, images, transform, mosaicScale]);
+  }, [activeImage, currentPath, images, transform, mosaicScale, watermark, watermarkImg]);
 
   // --- Interaction Logic ---
 
@@ -736,6 +820,8 @@ export const MosaicEditor: React.FC = () => {
 
       if (isSpacePressed) {
           // Panning
+      } else if (activeTab === 'watermark' && watermark.enabled) {
+          // Watermark dragging
       } else {
           // Drawing
           if (activeTab === 'tools') {
@@ -754,6 +840,29 @@ export const MosaicEditor: React.FC = () => {
               const dx = canvasX - lastPointerRef.current.x;
               const dy = canvasY - lastPointerRef.current.y;
               setTransform(prev => ({...prev, x: prev.x + dx, y: prev.y + dy}));
+              lastPointerRef.current = { x: canvasX, y: canvasY };
+          }
+      } else if (activeTab === 'watermark' && watermark.enabled) {
+          if (lastPointerRef.current) {
+              const dx = (canvasX - lastPointerRef.current.x) / transform.k;
+              const dy = (canvasY - lastPointerRef.current.y) / transform.k;
+              
+              const img = new Image();
+              img.src = activeImage.url;
+              if (!img.complete || !img.naturalWidth) return;
+              
+              const imgW = img.naturalWidth;
+              const imgH = img.naturalHeight;
+              
+              const dxPct = (dx / imgW) * 100;
+              const dyPct = (dy / imgH) * 100;
+              
+              setWatermark(prev => ({
+                  ...prev,
+                  x: Math.max(0, Math.min(100, prev.x + dxPct)),
+                  y: Math.max(0, Math.min(100, prev.y + dyPct))
+              }));
+              
               lastPointerRef.current = { x: canvasX, y: canvasY };
           }
       } else {
@@ -853,6 +962,7 @@ export const MosaicEditor: React.FC = () => {
           };
           activeImage.censorPaths.forEach(draw);
           renderVignette(ctx, canvas.width, canvas.height, activeImage.vignette);
+          renderWatermarkSync(ctx, canvas.width, canvas.height, watermark, watermarkImg);
 
           canvas.toBlob((blob) => {
               if (blob) {
@@ -945,6 +1055,7 @@ export const MosaicEditor: React.FC = () => {
                 };
                 item.censorPaths.forEach(draw);
                 renderVignette(ctx, canvas.width, canvas.height, item.vignette);
+                renderWatermarkSync(ctx, canvas.width, canvas.height, watermark, watermarkImg);
 
                 const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
                 if (blob) {
@@ -1012,7 +1123,7 @@ export const MosaicEditor: React.FC = () => {
             className={`
                 flex-1 min-h-[400px] rounded-xl border border-white/5 relative overflow-hidden group/canvas select-none
                 ${activeImage ? 'bg-gradient-to-b from-[#353535] to-[#1e1e1e]' : 'bg-zinc-900/50'}
-                ${isSpacePressed ? 'cursor-grab active:cursor-grabbing' : (activeTab === 'tools' ? 'cursor-crosshair' : 'cursor-default')}
+                ${isSpacePressed ? 'cursor-grab active:cursor-grabbing' : (activeTab === 'tools' ? 'cursor-crosshair' : (activeTab === 'watermark' && watermark.enabled ? 'cursor-move' : 'cursor-default'))}
             `}
         >
             {activeImage ? (
@@ -1081,6 +1192,12 @@ export const MosaicEditor: React.FC = () => {
                                 className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-mono font-bold transition-all ${activeTab === 'effects' ? 'bg-zinc-600 text-white shadow-sm' : 'text-zinc-500 hover:text-white'}`}
                              >
                                 <Aperture size={14} /> EFFECTS
+                             </button>
+                             <button 
+                                onClick={() => setActiveTab('watermark')}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-mono font-bold transition-all ${activeTab === 'watermark' ? 'bg-zinc-600 text-white shadow-sm' : 'text-zinc-500 hover:text-white'}`}
+                             >
+                                <Type size={14} /> WATERMARK
                              </button>
                              <button 
                                 onClick={() => setActiveTab('export')}
@@ -1164,6 +1281,76 @@ export const MosaicEditor: React.FC = () => {
                                     <input type="range" min={s.min} max={s.max} step={s.step} value={s.val} onChange={(e) => updateVignette({ [s.k]: parseFloat(e.target.value) })} className="h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer" />
                                 </div>
                              ))}
+                        </div>
+                    )}
+
+                    {activeImage && activeTab === 'watermark' && (
+                        <div className="flex items-center gap-4 pl-4 border-l border-white/10 animate-in fade-in slide-in-from-left-2 duration-200">
+                             <div className="flex items-center gap-2">
+                                <button onClick={() => setWatermark({...watermark, enabled: !watermark.enabled})} className={`text-xs font-mono font-bold px-3 py-1 rounded border transition-colors ${watermark.enabled ? 'bg-accent/20 text-accent border-accent/50' : 'bg-zinc-800 text-zinc-500 border-transparent hover:text-zinc-300'}`}>
+                                    {watermark.enabled ? 'ON' : 'OFF'}
+                                </button>
+                             </div>
+
+                             <div className={`flex flex-1 items-center gap-4 transition-opacity duration-300 ${!watermark.enabled ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
+                                 <input 
+                                    type="text" 
+                                    value={watermark.text}
+                                    onChange={(e) => setWatermark({...watermark, text: e.target.value})}
+                                    placeholder="Enter text..."
+                                    className="bg-zinc-900 border border-white/10 rounded px-3 py-1.5 text-xs text-white font-mono w-32 focus:border-accent outline-none"
+                                 />
+                                 
+                                 <div className="flex items-center gap-1 border-l border-white/5 pl-4">
+                                     <button 
+                                        onClick={() => setWatermark({...watermark, icon: watermark.icon === 'x' ? 'none' : 'x'})}
+                                        className={`w-8 h-8 rounded flex items-center justify-center border transition-all ${watermark.icon === 'x' ? 'bg-white border-white text-black' : 'bg-zinc-800 border-white/5 text-zinc-500 hover:text-zinc-300'}`}
+                                        title="X (Twitter)"
+                                     >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                          <path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z" />
+                                        </svg>
+                                     </button>
+                                     <button 
+                                        onClick={() => setWatermark({...watermark, icon: watermark.icon === 'patreon' ? 'none' : 'patreon'})}
+                                        className={`w-8 h-8 rounded flex items-center justify-center border transition-all ${watermark.icon === 'patreon' ? 'bg-[#FF424D] border-[#FF424D] text-white' : 'bg-zinc-800 border-white/5 text-zinc-500 hover:text-zinc-300'}`}
+                                        title="Patreon"
+                                     >
+                                        <svg width="14" height="14" viewBox="0 0 512 512" fill="currentColor" fillRule="evenodd" clipRule="evenodd" strokeLinejoin="round" strokeMiterlimit="2">
+                                            <g transform="matrix(.47407 0 0 .47407 .383 .422)">
+                                                <clipPath id="prefix__a"><path d="M0 0h1080v1080H0z"/></clipPath>
+                                                <g clipPath="url(#prefix__a)">
+                                                    <path d="M1033.05 324.45c-.19-137.9-107.59-250.92-233.6-291.7-156.48-50.64-362.86-43.3-512.28 27.2-181.1 85.46-237.99 272.66-240.11 459.36-1.74 153.5 13.58 557.79 241.62 560.67 169.44 2.15 194.67-216.18 273.07-321.33 55.78-74.81 127.6-95.94 216.01-117.82 151.95-37.61 255.51-157.53 255.29-316.38z" fillRule="nonzero"/>
+                                                </g>
+                                            </g>
+                                        </svg>
+                                     </button>
+                                 </div>
+
+                                 <div className="flex items-center gap-4 border-l border-white/5 pl-4">
+                                     <div className="flex flex-col gap-1 w-20">
+                                        <label className="text-[9px] font-mono text-zinc-500">OPACITY</label>
+                                        <input type="range" min="0" max="1" step="0.1" value={watermark.opacity} onChange={(e) => setWatermark({...watermark, opacity: parseFloat(e.target.value)})} className="h-1.5 w-full bg-zinc-700 rounded-lg appearance-none cursor-pointer" />
+                                     </div>
+                                     <div className="flex flex-col gap-1 w-20">
+                                        <label className="text-[9px] font-mono text-zinc-500">SIZE</label>
+                                        <input type="range" min="0.5" max="3" step="0.1" value={watermark.size} onChange={(e) => setWatermark({...watermark, size: parseFloat(e.target.value)})} className="h-1.5 w-full bg-zinc-700 rounded-lg appearance-none cursor-pointer" />
+                                     </div>
+                                     <div className="flex flex-col gap-1 w-20">
+                                        <label className="text-[9px] font-mono text-zinc-500">LOGO SIZE</label>
+                                        <input 
+                                            type="range" 
+                                            min="0.5" 
+                                            max="2.5" 
+                                            step="0.1" 
+                                            value={watermark.iconScale ?? 1} 
+                                            onChange={(e) => setWatermark({...watermark, iconScale: parseFloat(e.target.value)})} 
+                                            disabled={watermark.icon === 'none'}
+                                            className={`h-1.5 w-full bg-zinc-700 rounded-lg appearance-none cursor-pointer ${watermark.icon === 'none' ? 'opacity-30' : ''}`} 
+                                        />
+                                     </div>
+                                 </div>
+                             </div>
                         </div>
                     )}
 
