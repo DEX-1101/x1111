@@ -1547,7 +1547,7 @@ export const TagEditor: React.FC = () => {
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-zinc-300 flex justify-between">
                   <span>General Thresh</span>
@@ -1570,29 +1570,26 @@ export const TagEditor: React.FC = () => {
                   className="w-full accent-themePrimary"
                 />
               </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-zinc-300 flex justify-between">
-                <span>Maximum Tag</span>
-                <span className="text-zinc-500">{wdTopK === 0 ? 'No Limit' : wdTopK}</span>
-              </label>
-              <div className="flex items-center gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-zinc-300 flex justify-between">
+                  <span>Maximum Tag</span>
+                  <span className="text-zinc-500">{wdTopK === 0 ? 'No Limit' : wdTopK}</span>
+                </label>
                 <input 
                   type="range" min="0" max="100" step="1"
                   value={wdTopK} onChange={e => setWdTopK(parseInt(e.target.value))}
-                  className="flex-1 accent-themePrimary"
+                  className="w-full accent-themePrimary"
                 />
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <input 
-                    type="checkbox" id="wdRemoveUnderscore"
-                    checked={wdRemoveUnderscore} onChange={e => setWdRemoveUnderscore(e.target.checked)}
-                    className="w-3.5 h-3.5 rounded border-white/20 bg-black/50 text-themePrimary focus:ring-themePrimary/50 focus:ring-offset-0"
-                  />
-                  <label htmlFor="wdRemoveUnderscore" className="text-[11px] font-medium text-zinc-400 cursor-pointer select-none">
-                    No _
-                  </label>
-                </div>
+              </div>
+              <div className="flex items-center gap-2.5 p-2 bg-white/5 rounded-lg border border-white/5 h-[46px] self-end">
+                <input 
+                  type="checkbox" id="wdRemoveUnderscore"
+                  checked={wdRemoveUnderscore} onChange={e => setWdRemoveUnderscore(e.target.checked)}
+                  className="w-4 h-4 rounded border-white/20 bg-black/50 text-themePrimary focus:ring-themePrimary/50 focus:ring-offset-0"
+                />
+                <label htmlFor="wdRemoveUnderscore" className="text-xs font-medium text-zinc-300 cursor-pointer select-none leading-tight">
+                  Remove Underscore
+                </label>
               </div>
             </div>
 
