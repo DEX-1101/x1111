@@ -35,6 +35,33 @@ export const UpscaleEditor: React.FC = () => {
     localStorage.setItem('upscale-scale', scale.toString());
   }, [scale]);
 
+  const originalTitleRef = useRef(document.title);
+  useEffect(() => {
+    if (isProcessing) {
+      const processingItems = items.filter(i => i.status === 'processing');
+      const doneItems = items.filter(i => i.status === 'done');
+      const total = items.length;
+      const done = doneItems.length;
+      
+      if (processingItems.length > 0) {
+        const currentItem = processingItems[0];
+        document.title = `[${done}/${total}] ${currentItem.progress}% - Upscaling...`;
+      } else {
+        document.title = `[${done}/${total}] Finalizing...`;
+      }
+    } else if (isInitializing) {
+      document.title = `[${initProgress}%] Initializing AI...`;
+    } else if (isZipping) {
+      document.title = `Zipping...`;
+    } else {
+      document.title = originalTitleRef.current;
+    }
+
+    return () => {
+      document.title = originalTitleRef.current;
+    };
+  }, [isProcessing, isInitializing, isZipping, items, initProgress]);
+
   const handleAddFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const newFiles = Array.from(e.target.files);
