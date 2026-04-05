@@ -4,7 +4,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gemini Collage Mixer</title>
+    <title>x1101 Workspace</title>
+    <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/DEX-1101/SecretNAI/refs/heads/main/avatar.png" />
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script>
@@ -20,6 +21,12 @@
               surface: '#18181b',
               primary: '#e4e4e7',
               accent: '#3b82f6',
+              themePrimary: 'var(--theme-primary)',
+              themePrimaryHover: 'var(--theme-primary-hover)',
+              themeBtn: 'var(--theme-btn-bg)',
+              themeBtnHover: 'var(--theme-btn-hover)',
+              themeBtnText: 'var(--theme-btn-text)',
+              themeBorder: 'var(--theme-border)',
             },
             animation: {
               'shimmer': 'shimmer 3s ease-in-out infinite',
@@ -50,6 +57,43 @@
         color: #e4e4e7;
         font-family: 'Inter', system-ui, sans-serif;
       }
+      
+      :root {
+        --theme-primary: #ffffff;
+        --theme-primary-hover: #e4e4e7;
+        --theme-btn-bg: #ffffff;
+        --theme-btn-hover: #e4e4e7;
+        --theme-btn-text: #000000;
+        --theme-border: rgba(255, 255, 255, 0.1);
+      }
+      
+      body[data-theme="blue"] {
+        --theme-primary: #3b82f6;
+        --theme-primary-hover: #2563eb;
+        --theme-btn-bg: #2563eb;
+        --theme-btn-hover: #1d4ed8;
+        --theme-btn-text: #ffffff;
+        --theme-border: rgba(37, 99, 235, 0.5);
+      }
+      
+      body[data-theme="purple"] {
+        --theme-primary: #a855f7;
+        --theme-primary-hover: #9333ea;
+        --theme-btn-bg: #9333ea;
+        --theme-btn-hover: #7e22ce;
+        --theme-btn-text: #ffffff;
+        --theme-border: rgba(147, 51, 234, 0.5);
+      }
+      
+      body[data-theme="red"] {
+        --theme-primary: #ef4444;
+        --theme-primary-hover: #dc2626;
+        --theme-btn-bg: #dc2626;
+        --theme-btn-hover: #b91c1c;
+        --theme-btn-text: #ffffff;
+        --theme-border: rgba(220, 38, 38, 0.5);
+      }
+
       /* Custom scrollbar for headless feel */
       ::-webkit-scrollbar {
         width: 6px;

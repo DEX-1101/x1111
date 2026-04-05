@@ -187,7 +187,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                          </div>
                          <button 
                             onClick={() => onWatermarkChange({...watermark, enabled: !watermark.enabled})}
-                            className={`w-10 h-5 rounded-full p-0.5 transition-colors duration-300 flex items-center shadow-inner ${watermark.enabled ? 'bg-blue-500 justify-end' : 'bg-white/10 justify-start'}`}
+                            className={`w-10 h-5 rounded-full p-0.5 transition-colors duration-300 flex items-center shadow-inner ${watermark.enabled ? 'bg-themePrimary justify-end' : 'bg-white/10 justify-start'}`}
                          >
                              <div className="w-4 h-4 bg-white rounded-full shadow-sm" />
                          </button>
@@ -199,7 +199,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
                             value={watermark.text}
                             onChange={(e) => onWatermarkChange({...watermark, text: e.target.value})}
                             placeholder="Enter text..."
-                            className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white w-full md:w-48 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder:text-zinc-600"
+                            className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white w-full md:w-48 focus:border-themePrimary focus:ring-1 focus:ring-themePrimary outline-none transition-all placeholder:text-zinc-600"
                          />
                          
                          <div className="flex items-center gap-2 border-l border-white/10 pl-5">
@@ -299,7 +299,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
               {remaining > 0 && (
               <button 
                   onClick={() => fileInputRef.current?.click()}
-                  className="aspect-square flex flex-col items-center justify-center border-2 border-dashed border-white/10 hover:border-blue-500/50 hover:bg-blue-500/5 transition-all duration-300 text-zinc-500 hover:text-blue-400 rounded-xl group"
+                  className="aspect-square flex flex-col items-center justify-center border-2 border-dashed border-white/10 hover:border-themePrimary/50 hover:bg-themePrimary/5 transition-all duration-300 text-zinc-500 hover:text-themePrimary rounded-xl group"
               >
                   <Upload size={18} className="group-hover:-translate-y-1 transition-transform duration-300" />
                   <span className="text-[10px] font-semibold mt-2 tracking-wide">ADD</span>

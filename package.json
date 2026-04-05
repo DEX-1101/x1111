@@ -9,11 +9,19 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "lucide-react": "^0.562.0",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@google/genai": "^1.34.0",
+    "@huggingface/hub": "^2.11.0",
+    "@zip.js/zip.js": "^2.7.34",
+    "lucide-react": "^0.562.0",
+    "motion": "^12.38.0",
+    "onnxruntime-web": "^1.24.3",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "@zip.js/zip.js": "2.7.34"
+    "react-image-crop": "^11.0.10",
+    "react-zoom-pan-pinch": "^3.7.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

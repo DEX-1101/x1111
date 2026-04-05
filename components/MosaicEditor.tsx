@@ -992,16 +992,18 @@ export const MosaicEditor: React.FC = () => {
           renderVignette(ctx, canvas.width, canvas.height, activeImage.vignette);
           renderWatermarkSync(ctx, canvas.width, canvas.height, watermark, watermarkImg);
 
+          const mimeType = activeImage.file.type || 'image/png';
           canvas.toBlob((blob) => {
               if (blob) {
                   const originalName = activeImage.file.name;
                   const lastDot = originalName.lastIndexOf('.');
                   const baseName = lastDot !== -1 ? originalName.substring(0, lastDot) : originalName;
-                  const fileName = `${baseName} censor.png`;
+                  const ext = lastDot !== -1 ? originalName.substring(lastDot) : '.png';
+                  const fileName = `${baseName} censor${ext}`;
                   
                   saveBlob(blob, fileName);
               }
-          }, 'image/png');
+          }, mimeType, 0.9);
       }
   };
 
@@ -1085,19 +1087,20 @@ export const MosaicEditor: React.FC = () => {
                 renderVignette(ctx, canvas.width, canvas.height, item.vignette);
                 renderWatermarkSync(ctx, canvas.width, canvas.height, watermark, watermarkImg);
 
-                const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+                const mimeType = item.file.type || 'image/jpeg';
+                const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, mimeType, 0.9));
                 if (blob) {
-                    // Logic to use original filename with .jpg extension
+                    // Logic to use original filename with original extension
                     const originalName = item.file.name;
                     const lastDot = originalName.lastIndexOf('.');
                     const baseName = lastDot !== -1 ? originalName.substring(0, lastDot) : originalName;
-                    let fileName = `${baseName}.jpg`;
+                    const ext = lastDot !== -1 ? originalName.substring(lastDot) : '.jpg';
+                    let fileName = `${baseName}${ext}`;
                     
                     // Simple deduplication if same filenames exist in list
                     let counter = 1;
-                    const rootName = fileName.replace(/\.jpg$/i, '');
                     while (usedNames.has(fileName)) {
-                        fileName = `${rootName} (${counter}).jpg`;
+                        fileName = `${baseName} (${counter})${ext}`;
                         counter++;
                     }
                     usedNames.add(fileName);
@@ -1178,8 +1181,8 @@ export const MosaicEditor: React.FC = () => {
             ) : (
                 <div className="w-full h-full relative overflow-hidden rounded-xl bg-white/5 border border-white/10 backdrop-blur-md flex flex-col items-center justify-center gap-6">
                     <div className="relative w-40 h-[2px] bg-zinc-800/50 rounded-full overflow-hidden">
-                        <div className="absolute inset-0 bg-blue-500/20 blur-[2px] animate-pulse"></div>
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-500 to-transparent w-full h-full -translate-x-full animate-shimmer"></div>
+                        <div className="absolute inset-0 bg-themePrimary/20 blur-[2px] animate-pulse"></div>
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-themePrimary to-transparent w-full h-full -translate-x-full animate-shimmer"></div>
                     </div>
                     <div className="flex flex-col items-center gap-3 text-zinc-400 text-sm font-medium tracking-wide">
                         <ImagePlus size={28} className="opacity-60" />

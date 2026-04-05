@@ -18,7 +18,7 @@ export const LogViewer: React.FC<LogViewerProps> = ({ logs, status, onClick, onC
   const getStatusInfo = (s: AppStatus) => {
      switch(s) {
          case AppStatus.IDLE: return { text: "Generate Layout", icon: Sparkles, color: "text-white" };
-         case AppStatus.ANALYZING_FACES: return { text: "Detecting Faces", icon: ScanFace, color: "text-blue-400" };
+         case AppStatus.ANALYZING_FACES: return { text: "Detecting Faces", icon: ScanFace, color: "text-themePrimary" };
          case AppStatus.GENERATING_LAYOUT: return { text: "Designing Layout", icon: LayoutTemplate, color: "text-indigo-400" };
          case AppStatus.GENERATING_BACKGROUND: return { text: "Creating Texture", icon: Palette, color: "text-pink-400" };
          case AppStatus.READY: return { text: "Mix Complete", icon: CheckCircle2, color: "text-emerald-400" };
@@ -43,21 +43,21 @@ export const LogViewer: React.FC<LogViewerProps> = ({ logs, status, onClick, onC
         className={`
             w-full h-full min-h-[80px] relative overflow-hidden rounded-2xl transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] group flex flex-col justify-center
             ${isIdle 
-                ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_40px_rgba(59,130,246,0.3)] hover:shadow-[0_0_60px_rgba(59,130,246,0.5)] active:scale-[0.98]' 
+                ? 'bg-themeBtn hover:bg-themeBtnHover text-themeBtnText shadow-[0_0_40px_var(--theme-primary)] hover:shadow-[0_0_60px_var(--theme-primary)] active:scale-[0.98]' 
                 : 'bg-white/5 border border-white/10 backdrop-blur-xl shadow-2xl p-4 text-left'
             }
             ${disabled && isIdle ? 'opacity-50 cursor-not-allowed bg-white/5 text-zinc-500 hover:bg-white/5 hover:shadow-none border border-white/5' : ''}
             ${!isIdle && !disabled ? 'cursor-pointer hover:border-white/20 hover:bg-white/10' : ''}
             ${!isIdle && disabled && !isProcessing ? 'cursor-default' : ''}
-            ${isProcessing ? 'cursor-default border-blue-500/30 bg-blue-500/5' : ''}
+            ${isProcessing ? 'cursor-default border-themePrimary/30 bg-themePrimary/5' : ''}
         `}
     >
         {/* PROCESSING ANIMATION */}
         {isProcessing && (
             <div className="absolute inset-0 pointer-events-none">
-                <div className="absolute inset-0 bg-blue-500/10 animate-pulse"></div>
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-500/20 to-transparent w-full h-full -translate-x-full animate-shimmer"></div>
-                <div className="absolute bottom-0 left-0 w-full h-[2px] bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.8)]"></div>
+                <div className="absolute inset-0 bg-themePrimary/10 animate-pulse"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-themePrimary/20 to-transparent w-full h-full -translate-x-full animate-shimmer"></div>
+                <div className="absolute bottom-0 left-0 w-full h-[2px] bg-themePrimary shadow-[0_0_15px_var(--theme-primary)]"></div>
             </div>
         )}
 

@@ -687,8 +687,8 @@ export const CollageDisplay: React.FC<CollageDisplayProps> = ({
                     {/* Placeholder Content */}
                     <div className="absolute inset-0 bg-black/40 backdrop-blur-2xl rounded-3xl flex flex-col items-center justify-center gap-6">
                         <div className="relative w-48 h-[3px] bg-white/10 rounded-full overflow-hidden">
-                            <div className="absolute inset-0 bg-blue-500/30 blur-[4px] animate-pulse"></div>
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-400 to-transparent w-full h-full -translate-x-full animate-shimmer"></div>
+                            <div className="absolute inset-0 bg-themePrimary/30 blur-[4px] animate-pulse"></div>
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-themePrimary to-transparent w-full h-full -translate-x-full animate-shimmer"></div>
                         </div>
                         <p className="text-zinc-400 font-semibold text-sm uppercase tracking-[0.3em] animate-pulse">
                             Ready for Input
