@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FolderOpen, Save, X, Image as ImageIcon, Tag, Send, Undo2, Redo2, Crop as CropIcon, Plus, Settings, Wand2, Trash2, Archive, Download, UploadCloud, Paintbrush, MousePointer2 } from 'lucide-react';
+import { FolderOpen, Save, X, Image as ImageIcon, Tag, Send, Undo2, Redo2, Crop as CropIcon, Plus, Settings, Wand2, Trash2, Archive, Download, UploadCloud, Paintbrush, MousePointer2, Maximize2 } from 'lucide-react';
 import { 
   DndContext, 
   closestCenter, 
@@ -21,6 +21,7 @@ import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import ReactCrop, { type Crop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { wdTagger, deleteModelFromDB, checkModelExists } from '../lib/wdTagger';
+import { upscaler } from '../lib/upscaler';
 import { ZipWriter, BlobWriter, BlobReader, TextReader } from '@zip.js/zip.js';
 import { uploadFile } from '@huggingface/hub';
 
@@ -206,6 +207,13 @@ export const TagEditor: React.FC = () => {
     index: 0
   });
 
+  // Upscaler State
+  const [isUpscalerModalOpen, setIsUpscalerModalOpen] = useState(false);
+  const [upscaleScale, setUpscaleScale] = useState(() => parseFloat(localStorage.getItem('upscale_scale') || '2.0'));
+  const [upscaleStatus, setUpscaleStatus] = useState<'idle' | 'loading' | 'processing' | 'done'>('idle');
+  const [upscaleProgress, setUpscaleProgress] = useState(0);
+  const [upscaleProgressText, setUpscaleProgressText] = useState('');
+
   const cancelRef = useRef<boolean>(false);
   const handleCancel = () => {
     cancelRef.current = true;
@@ -270,7 +278,8 @@ export const TagEditor: React.FC = () => {
     localStorage.setItem('inpaint_brushSize', brushSize.toString());
     localStorage.setItem('inpaint_brushColor', brushColor);
     localStorage.setItem('inpaint_mode', inpaintMode);
-  }, [selectedModelId, wdThreshold, wdCharThreshold, wdOverwrite, wdRemoveRedundant, wdRemoveUnderscore, wdExcludeCategories, wdTopK, batchActivationTags, batchEmphasizeTags, batchRemoveTags, batchRename, hfToken, hfRepo, brushSize, brushColor, inpaintMode]);
+    localStorage.setItem('upscale_scale', upscaleScale.toString());
+  }, [selectedModelId, wdThreshold, wdCharThreshold, wdOverwrite, wdRemoveRedundant, wdRemoveUnderscore, wdExcludeCategories, wdTopK, batchActivationTags, batchEmphasizeTags, batchRemoveTags, batchRename, hfToken, hfRepo, brushSize, brushColor, inpaintMode, upscaleScale]);
 
   useEffect(() => {
     checkModelExists(selectedModelId).then(exists => setWdModelExists(exists));
@@ -545,6 +554,92 @@ export const TagEditor: React.FC = () => {
       setBatchStatus('idle');
       setBatchProgress(0);
       setBatchProgressText('');
+    }
+  };
+
+  const handleUpscale = async () => {
+    if (selectedIndex === -1 || !previewUrl) return;
+    const currentFile = files[selectedIndex];
+    
+    cancelRef.current = false;
+    setUpscaleStatus('loading');
+    setUpscaleProgress(0);
+    setUpscaleProgressText('Initializing upscaler...');
+
+    try {
+      await upscaler.init((progress, status) => {
+        setUpscaleProgress(progress);
+        setUpscaleProgressText(status);
+      });
+
+      setUpscaleStatus('processing');
+      setUpscaleProgress(0);
+      setUpscaleProgressText('Upscaling image...');
+
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = previewUrl;
+      });
+
+      const upscaledDataUrl = await upscaler.upscale(img, upscaleScale, (p) => {
+        setUpscaleProgress(Math.round(p * 100));
+        setUpscaleProgressText(`Upscaling... ${Math.round(p * 100)}%`);
+      });
+
+      if (cancelRef.current) {
+        setUpscaleStatus('idle');
+        setUpscaleProgress(0);
+        setUpscaleProgressText('');
+        return;
+      }
+
+      const res = await fetch(upscaledDataUrl);
+      const blob = await res.blob();
+
+      const newName = `${currentFile.baseName.split('/').pop()}_x${upscaleScale.toFixed(1)}.png`;
+      const newHandle = await currentFile.parentHandle.getFileHandle(newName, { create: true });
+      const writable = await newHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+
+      // Create matching .txt file with same tags
+      const txtName = `${newName.replace(/\.[^/.]+$/, "")}.txt`;
+      const txtHandle = await currentFile.parentHandle.getFileHandle(txtName, { create: true });
+      const txtWritable = await txtHandle.createWritable();
+      await txtWritable.write(currentFile.tags.join(', '));
+      await txtWritable.close();
+
+      // Add to file list
+      const newEntry: FileEntry = {
+        imageHandle: newHandle,
+        textHandle: txtHandle,
+        name: newName,
+        baseName: currentFile.baseName.substring(0, currentFile.baseName.lastIndexOf('/') + 1) + newName.replace(/\.[^/.]+$/, ""),
+        tags: [...currentFile.tags],
+        parentHandle: currentFile.parentHandle
+      };
+      
+      setFiles(prev => [...prev, newEntry]);
+
+      setUpscaleStatus('done');
+      setUpscaleProgress(100);
+      setUpscaleProgressText('Upscale complete!');
+      
+      setTimeout(() => {
+        setIsUpscalerModalOpen(false);
+        setUpscaleStatus('idle');
+        setUpscaleProgress(0);
+        setUpscaleProgressText('');
+      }, 2000);
+
+    } catch (err) {
+      console.error(err);
+      alert(`Upscale failed: ${err instanceof Error ? err.message : String(err)}`);
+      setUpscaleStatus('idle');
+      setUpscaleProgress(0);
+      setUpscaleProgressText('');
     }
   };
 
@@ -1326,17 +1421,19 @@ export const TagEditor: React.FC = () => {
             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-[960px] max-w-[95vw] flex flex-col items-center justify-end z-50 pointer-events-none">
               
               {/* Global Floating Progress Bar */}
-              <div className={`absolute bottom-full mb-4 w-[400px] max-w-[90vw] bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-4 pointer-events-auto transition-all duration-300 ease-in-out ${(wdStatus !== 'idle' || batchStatus !== 'idle' || zipStatus !== 'idle') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}`}>
+              <div className={`absolute bottom-full mb-4 w-[400px] max-w-[90vw] bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-4 pointer-events-auto transition-all duration-300 ease-in-out ${(wdStatus !== 'idle' || batchStatus !== 'idle' || zipStatus !== 'idle' || upscaleStatus !== 'idle') ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8 pointer-events-none'}`}>
                 <div className="flex justify-between text-sm text-white font-medium mb-2 gap-2">
                   <span className="truncate">
                     {wdStatus !== 'idle' ? wdProgressText : 
                      batchStatus !== 'idle' ? batchProgressText : 
-                     zipProgressText}
+                     zipStatus !== 'idle' ? zipProgressText :
+                     upscaleProgressText}
                   </span>
                   <span className="shrink-0">
                     {wdStatus !== 'idle' ? wdProgress : 
                      batchStatus !== 'idle' ? batchProgress : 
-                     zipProgress}%
+                     zipStatus !== 'idle' ? zipProgress :
+                     upscaleProgress}%
                   </span>
                 </div>
                 <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
@@ -1345,7 +1442,8 @@ export const TagEditor: React.FC = () => {
                     style={{ width: `${
                       wdStatus !== 'idle' ? wdProgress : 
                       batchStatus !== 'idle' ? batchProgress : 
-                      zipProgress
+                      zipStatus !== 'idle' ? zipProgress :
+                      upscaleProgress
                     }%` }}
                   />
                 </div>
@@ -1395,6 +1493,15 @@ export const TagEditor: React.FC = () => {
                         <Redo2 size={16}/>
                       </button>
                     </div>
+
+                    <button 
+                      onClick={() => setIsUpscalerModalOpen(true)}
+                      disabled={isProcessing || selectedIndex === -1}
+                      className="p-2 hover:bg-white/10 text-white rounded-lg transition-colors border border-white/10 disabled:opacity-30"
+                      title="Upscale Image"
+                    >
+                      <Maximize2 size={18} />
+                    </button>
 
                     <button 
                       onClick={() => setIsAutoTagModalOpen(true)} 
@@ -1512,6 +1619,67 @@ export const TagEditor: React.FC = () => {
                 )}
                 {saveStatus === 'saving' ? 'Applying...' : 'Apply Crop'}
               </button>
+            </div>
+
+            {/* Floating Upscaler Overlay */}
+            <div className={`w-[400px] max-w-[90vw] flex flex-col bg-black/80 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden transition-all duration-300 ease-in-out ${isUpscalerModalOpen ? 'opacity-100 translate-y-0 relative pointer-events-auto' : 'opacity-0 translate-y-8 absolute bottom-0 pointer-events-none'}`}>
+              <div className="flex items-center justify-between p-4 border-b border-white/10">
+                <h3 className="text-white font-bold flex items-center gap-2">
+                  <Maximize2 size={18} className="text-themePrimary" />
+                  Image Upscaler
+                </h3>
+                <button 
+                  onClick={() => setIsUpscalerModalOpen(false)}
+                  className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/10 rounded-md transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              
+              <div className="p-6 space-y-6">
+                <div className="space-y-3">
+                  <label className="text-sm font-medium text-zinc-300 flex justify-between">
+                    <span>Upscale Factor</span>
+                    <span className="text-themePrimary font-bold">{upscaleScale.toFixed(1)}x</span>
+                  </label>
+                  <input 
+                    type="range" min="1" max="4" step="0.1"
+                    value={upscaleScale} onChange={e => setUpscaleScale(parseFloat(e.target.value))}
+                    className="w-full accent-themePrimary"
+                  />
+                  <div className="flex justify-between text-[10px] text-zinc-500 font-mono">
+                    <span>1.0x</span>
+                    <span>2.0x</span>
+                    <span>3.0x</span>
+                    <span>4.0x</span>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-white/5 rounded-lg border border-white/5 space-y-2">
+                  <p className="text-[11px] text-zinc-400 leading-relaxed">
+                    Using <span className="text-zinc-200">Real-ESRGAN x4plus Anime</span> model. 
+                    Optimized with tiling for large images. Supports transparency.
+                  </p>
+                </div>
+
+                {upscaleStatus === 'processing' || upscaleStatus === 'loading' ? (
+                  <button 
+                    onClick={handleCancel}
+                    className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white border border-red-500 font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-red-900/20"
+                  >
+                    <X size={18} /> Cancel
+                  </button>
+                ) : (
+                  <button 
+                    onClick={handleUpscale}
+                    disabled={isProcessing || selectedIndex === -1}
+                    className="w-full py-3 rounded-xl bg-themeBtn hover:bg-themeBtnHover text-themeBtnText border border-themeBorder font-bold flex items-center justify-center gap-2 disabled:opacity-50 transition-all shadow-lg shadow-themePrimary/20"
+                  >
+                    <Maximize2 size={18} />
+                    {upscaleStatus === 'done' ? 'Upscale Another' : 'Start Upscale'}
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Floating Auto Tag & Batch Processing Overlay */}

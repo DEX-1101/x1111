@@ -4,14 +4,15 @@ import { ImageUploader } from './components/ImageUploader';
 import { CollageDisplay } from './components/CollageDisplay';
 import { MosaicEditor } from './components/MosaicEditor';
 import { TagEditor } from './components/TagEditor';
+import { UpscaleEditor } from './components/UpscaleEditor';
 import { generateCollageLayout, generateBackgroundTexture, detectFaceCenters } from './services/geminiService';
 import { saveMixerState, loadMixerState } from './services/mixerStorage';
 import { ImageItem, CollageLayout, AppStatus, LogEntry, AspectRatio, WatermarkSettings, GlobalBlurSettings } from './types';
-import { AlertCircle, Layers, Grid2X2, Loader2, Tag } from 'lucide-react';
+import { AlertCircle, Layers, Grid2X2, Loader2, Tag, Maximize } from 'lucide-react';
 
 const MAX_IMAGES = 6;
 
-type AppMode = 'MIX' | 'MOSAIC' | 'TAGS';
+type AppMode = 'MIX' | 'MOSAIC' | 'TAGS' | 'UPSCALE';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<AppMode>('MIX');
@@ -245,7 +246,7 @@ const App: React.FC = () => {
   const isBusy = status === AppStatus.ANALYZING_FACES || status === AppStatus.GENERATING_LAYOUT || status === AppStatus.GENERATING_BACKGROUND;
 
   return (
-    <div className={`min-h-screen bg-background text-gray-200 flex flex-col items-center p-4 selection:bg-accent selection:text-white ${mode === 'MOSAIC' || mode === 'TAGS' ? 'h-screen overflow-hidden' : ''}`}>
+    <div className={`min-h-screen bg-background text-gray-200 flex flex-col items-center p-4 selection:bg-accent selection:text-white ${mode === 'MOSAIC' || mode === 'TAGS' || mode === 'UPSCALE' ? 'h-screen overflow-hidden' : ''}`}>
       
       {/* --- SPLASH SCREEN --- */}
       <div 
@@ -275,7 +276,7 @@ const App: React.FC = () => {
       </div>
 
       {/* Header / Nav */}
-      <div className={`w-full flex items-center justify-center shrink-0 ${mode === 'MOSAIC' || mode === 'TAGS' ? 'max-w-[95%] mb-4' : 'max-w-6xl mb-8'}`}>
+      <div className={`w-full flex items-center justify-center shrink-0 ${mode === 'MOSAIC' || mode === 'TAGS' || mode === 'UPSCALE' ? 'max-w-[95%] mb-4' : 'max-w-6xl mb-8'}`}>
          <div className="flex bg-white/5 backdrop-blur-md p-1.5 rounded-2xl border border-white/10 shadow-2xl">
             <button
                 onClick={() => setMode('MIX')}
@@ -295,6 +296,12 @@ const App: React.FC = () => {
             >
                 <Tag size={16} /> TAG EDITOR
             </button>
+            <button
+                onClick={() => setMode('UPSCALE')}
+                className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold tracking-wide transition-all duration-300 ${mode === 'UPSCALE' ? 'bg-white/10 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)]' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
+            >
+                <Maximize size={16} /> UPSCALE
+            </button>
          </div>
          
          {/* Theme Switcher */}
@@ -306,7 +313,7 @@ const App: React.FC = () => {
          </div>
       </div>
 
-      <div className={`w-full flex flex-col gap-6 transition-all duration-500 ${mode === 'MOSAIC' || mode === 'TAGS' ? 'flex-1 h-full max-w-[95%] pb-10' : 'max-w-6xl'}`}>
+      <div className={`w-full flex flex-col gap-6 transition-all duration-500 ${mode === 'MOSAIC' || mode === 'TAGS' || mode === 'UPSCALE' ? 'flex-1 h-full max-w-[95%] pb-10' : 'max-w-6xl'}`}>
         
         {mode === 'MIX' ? (
             /* MIX MODE */
@@ -369,10 +376,15 @@ const App: React.FC = () => {
             <div className="w-full h-full animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <MosaicEditor />
             </div>
-        ) : (
+        ) : mode === 'TAGS' ? (
             /* TAGS MODE */
             <div className="w-full h-full animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <TagEditor />
+            </div>
+        ) : (
+            /* UPSCALE MODE */
+            <div className="w-full h-full animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <UpscaleEditor />
             </div>
         )}
       </div>
