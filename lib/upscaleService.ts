@@ -53,9 +53,14 @@ async function saveModelToDB(buffer: ArrayBuffer): Promise<void> {
 export class UpscaleService {
   private session: ort.InferenceSession | null = null;
   private currentProvider: string = 'wasm';
+  private isCancelled: boolean = false;
 
   getProvider(): string {
     return this.currentProvider;
+  }
+
+  cancel() {
+    this.isCancelled = true;
   }
 
   getModelInfo() {
@@ -132,6 +137,7 @@ export class UpscaleService {
 
   async upscale(image: HTMLImageElement, scale: number, onProgress?: (progress: number) => void): Promise<string> {
     if (!this.session) throw new Error("Session not initialized");
+    this.isCancelled = false;
 
     const canvas = document.createElement('canvas');
     canvas.width = image.width;
@@ -161,7 +167,9 @@ export class UpscaleService {
       }
       
       const upscaledRGBData = await this.processImage(new ImageData(rgbData, canvas.width, canvas.height), (p) => onProgress?.(p * 0.7));
+      if (this.isCancelled) throw new Error("Upscale cancelled");
       const upscaledAlphaData = await this.processImage(new ImageData(alphaData, canvas.width, canvas.height), (p) => onProgress?.(0.7 + p * 0.3));
+      if (this.isCancelled) throw new Error("Upscale cancelled");
       
       const finalData = new Uint8ClampedArray(upscaledRGBData.data.length);
       for (let i = 0; i < upscaledRGBData.data.length; i += 4) {
@@ -220,6 +228,7 @@ export class UpscaleService {
 
     for (let y = 0; y < height; y += tileSize - overlap * 2) {
       for (let x = 0; x < width; x += tileSize - overlap * 2) {
+        if (this.isCancelled) throw new Error("Upscale cancelled");
         const tw = Math.min(tileSize, width - x);
         const th = Math.min(tileSize, height - y);
 
