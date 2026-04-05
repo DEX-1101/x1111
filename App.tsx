@@ -80,6 +80,22 @@ const App: React.FC = () => {
     localStorage.setItem('app_theme', theme);
   }, [theme]);
 
+  const originalTitleRef = useRef(document.title);
+  useEffect(() => {
+    if (status === AppStatus.ANALYZING_FACES) {
+      document.title = "Analyzing Faces...";
+    } else if (status === AppStatus.GENERATING_LAYOUT) {
+      document.title = "Generating Layout...";
+    } else if (status === AppStatus.GENERATING_BACKGROUND) {
+      document.title = "Generating Background...";
+    } else {
+      document.title = originalTitleRef.current;
+    }
+    return () => {
+      document.title = originalTitleRef.current;
+    };
+  }, [status]);
+
   // Persistence: Save (Debounced)
   useEffect(() => {
     const t = setTimeout(() => {
