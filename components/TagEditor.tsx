@@ -165,6 +165,7 @@ export const TagEditor: React.FC = () => {
   const [wdCharThreshold, setWdCharThreshold] = useState(() => parseFloat(localStorage.getItem('wd_charThresh') || '0.85'));
   const [wdOverwrite, setWdOverwrite] = useState(() => localStorage.getItem('wd_overwrite') === 'true');
   const [wdRemoveRedundant, setWdRemoveRedundant] = useState(() => localStorage.getItem('wd_removeRedundant') === 'true');
+  const [wdRemoveUnderscore, setWdRemoveUnderscore] = useState(() => localStorage.getItem('wd_removeUnderscore') === 'true');
   const [wdExcludeCategories, setWdExcludeCategories] = useState<number[]>(() => {
     const saved = localStorage.getItem('wd_excludeCategories');
     return saved ? JSON.parse(saved) : [];
@@ -256,6 +257,7 @@ export const TagEditor: React.FC = () => {
     localStorage.setItem('wd_charThresh', wdCharThreshold.toString());
     localStorage.setItem('wd_overwrite', wdOverwrite.toString());
     localStorage.setItem('wd_removeRedundant', wdRemoveRedundant.toString());
+    localStorage.setItem('wd_removeUnderscore', wdRemoveUnderscore.toString());
     localStorage.setItem('wd_excludeCategories', JSON.stringify(wdExcludeCategories));
     localStorage.setItem('wd_topK', wdTopK.toString());
     localStorage.setItem('wd_recursive', wdRecursive.toString());
@@ -268,7 +270,7 @@ export const TagEditor: React.FC = () => {
     localStorage.setItem('inpaint_brushSize', brushSize.toString());
     localStorage.setItem('inpaint_brushColor', brushColor);
     localStorage.setItem('inpaint_mode', inpaintMode);
-  }, [selectedModelId, wdThreshold, wdCharThreshold, wdOverwrite, wdRemoveRedundant, wdExcludeCategories, wdTopK, batchActivationTags, batchEmphasizeTags, batchRemoveTags, batchRename, hfToken, hfRepo, brushSize, brushColor, inpaintMode]);
+  }, [selectedModelId, wdThreshold, wdCharThreshold, wdOverwrite, wdRemoveRedundant, wdRemoveUnderscore, wdExcludeCategories, wdTopK, batchActivationTags, batchEmphasizeTags, batchRemoveTags, batchRename, hfToken, hfRepo, brushSize, brushColor, inpaintMode]);
 
   useEffect(() => {
     checkModelExists(selectedModelId).then(exists => setWdModelExists(exists));
@@ -320,6 +322,10 @@ export const TagEditor: React.FC = () => {
 
         let generatedTags = await wdTagger.predict(img, wdThreshold, wdCharThreshold, wdExcludeCategories, wdTopK);
         URL.revokeObjectURL(imgUrl);
+
+        if (wdRemoveUnderscore) {
+          generatedTags = generatedTags.map(tag => tag.replace(/_/g, ' '));
+        }
 
         // Yield to main thread to prevent freezing
         await new Promise(resolve => setTimeout(resolve, 10));
@@ -1538,7 +1544,6 @@ export const TagEditor: React.FC = () => {
                 <option value="eva02-v3">EVA02 Large v3 (~1.2GB)</option>
                 <option value="vit-v3">ViT Large v3 (~1.2GB)</option>
                 <option value="swinv2-v2">SwinV2 v2 (~1.1GB)</option>
-                <option value="vit-base-v3">ViT Base v3 (~346MB)</option>
               </select>
             </div>
 
@@ -1569,14 +1574,26 @@ export const TagEditor: React.FC = () => {
 
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-zinc-300 flex justify-between">
-                <span>Limit by Maximum Number (Top-K)</span>
+                <span>Maximum Tag</span>
                 <span className="text-zinc-500">{wdTopK === 0 ? 'No Limit' : wdTopK}</span>
               </label>
-              <input 
-                type="range" min="0" max="100" step="1"
-                value={wdTopK} onChange={e => setWdTopK(parseInt(e.target.value))}
-                className="w-full accent-themePrimary"
-              />
+              <div className="flex items-center gap-3">
+                <input 
+                  type="range" min="0" max="100" step="1"
+                  value={wdTopK} onChange={e => setWdTopK(parseInt(e.target.value))}
+                  className="flex-1 accent-themePrimary"
+                />
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <input 
+                    type="checkbox" id="wdRemoveUnderscore"
+                    checked={wdRemoveUnderscore} onChange={e => setWdRemoveUnderscore(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-white/20 bg-black/50 text-themePrimary focus:ring-themePrimary/50 focus:ring-offset-0"
+                  />
+                  <label htmlFor="wdRemoveUnderscore" className="text-[11px] font-medium text-zinc-400 cursor-pointer select-none">
+                    No _
+                  </label>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2">
