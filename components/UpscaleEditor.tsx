@@ -26,6 +26,7 @@ export const UpscaleEditor: React.FC = () => {
   const [isModelReady, setIsModelReady] = useState(false);
   const [isZipping, setIsZipping] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const cancelRef = useRef(false);
   const [comparisonItem, setComparisonItem] = useState<UpscaleItem | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -65,8 +66,11 @@ export const UpscaleEditor: React.FC = () => {
   };
 
   const startUpscale = async () => {
+    if (isProcessing) return;
+    
     cancelRef.current = false;
     setIsCancelling(false);
+    setIsProcessing(true);
 
     if (!isModelReady) {
       setIsInitializing(true);
@@ -88,34 +92,44 @@ export const UpscaleEditor: React.FC = () => {
     const idleItems = items.filter(i => i.status === 'idle' || i.status === 'error');
     if (idleItems.length === 0) return;
 
-    for (const item of idleItems) {
-      if (cancelRef.current) break;
-      
-      setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'processing', progress: 0 } : i));
-      
-      try {
-        const img = new Image();
-        img.src = item.preview;
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = reject;
-        });
+    try {
+      for (const item of idleItems) {
+        if (cancelRef.current) break;
+        
+        setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'processing', progress: 0 } : i));
+        
+        try {
+          const img = new Image();
+          img.src = item.preview;
+          await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+          });
 
-        const resultUrl = await upscaleService.upscale(img, scale, (progress) => {
-          setItems(prev => prev.map(i => i.id === item.id ? { ...i, progress: Math.round(progress * 100) } : i));
-        });
+          const resultUrl = await upscaleService.upscale(img, scale, (progress) => {
+            setItems(prev => prev.map(i => i.id === item.id ? { ...i, progress: Math.round(progress * 100) } : i));
+          });
 
-        setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'done', progress: 100, result: resultUrl } : i));
-      } catch (err) {
-        console.error(err);
-        setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error', error: String(err) } : i));
+          setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'done', progress: 100, result: resultUrl } : i));
+        } catch (err) {
+          if (cancelRef.current || String(err).includes("cancelled")) {
+            // If cancelled, reset the item to idle instead of error
+            setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'idle', progress: 0 } : i));
+          } else {
+            console.error(err);
+            setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error', error: String(err) } : i));
+          }
+        }
       }
+    } finally {
+      setIsProcessing(false);
+      setIsCancelling(false);
     }
-    setIsCancelling(false);
   };
 
   const cancelUpscale = () => {
     cancelRef.current = true;
+    upscaleService.cancel();
     setIsCancelling(true);
     setItems(prev => prev.map(i => i.status === 'processing' ? { ...i, status: 'idle', progress: 0 } : i));
   };
@@ -206,17 +220,19 @@ export const UpscaleEditor: React.FC = () => {
               <Trash2 size={16} /> Clear All
             </button>
           )}
-          {items.some(i => i.status === 'processing') ? (
+          {isProcessing ? (
             <button 
               onClick={cancelUpscale}
-              className="flex items-center gap-2 px-6 py-2 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-red-900/20 transition-all"
+              disabled={isCancelling}
+              className="flex items-center gap-2 px-6 py-2 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-red-900/20 transition-all disabled:opacity-50"
             >
-              <X size={16} /> Cancel
+              {isCancelling ? <Loader2 className="animate-spin" size={16} /> : <X size={16} />}
+              {isCancelling ? 'Cancelling...' : 'Cancel'}
             </button>
           ) : (
             <button 
               onClick={startUpscale}
-              disabled={items.length === 0 || items.every(i => i.status === 'processing')}
+              disabled={items.length === 0}
               className="flex items-center gap-2 px-6 py-2 bg-themeBtn hover:bg-themeBtnHover text-themeBtnText rounded-xl text-sm font-bold shadow-lg shadow-themePrimary/20 transition-all disabled:opacity-50"
             >
               {isInitializing ? <Loader2 className="animate-spin" size={16} /> : <Maximize size={16} />}
