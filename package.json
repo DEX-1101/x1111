@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit"
@@ -16,6 +16,7 @@
     "@google/genai": "^1.34.0",
     "@huggingface/hub": "^2.11.0",
     "@zip.js/zip.js": "^2.7.34",
+    "express": "^5.2.1",
     "jszip": "^3.10.1",
     "lucide-react": "^0.562.0",
     "motion": "^12.38.0",
@@ -23,13 +24,14 @@
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-image-crop": "^11.0.10",
-    "react-markdown": "^10.1.0",
     "react-zoom-pan-pinch": "^3.7.0",
-    "remark-gfm": "^4.0.1",
+    "tsx": "^4.21.0",
     "use-debounce": "^10.1.1"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^22.14.0",
+    "@vercel/node": "^5.7.0",
     "@vitejs/plugin-react": "^5.0.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
