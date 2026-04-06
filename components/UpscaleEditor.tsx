@@ -64,7 +64,7 @@ export const UpscaleEditor: React.FC = () => {
 
   const handleAddFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
-    const newFiles = Array.from(e.target.files);
+    const newFiles: File[] = Array.from(e.target.files);
     const newItems: UpscaleItem[] = newFiles.map(file => ({
       id: Math.random().toString(36).substr(2, 9),
       file,

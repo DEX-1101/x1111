@@ -76,7 +76,7 @@ const Thumbnail = ({ imageHandle, name, urlCache }: { imageHandle: FileSystemFil
   );
 };
 
-const SortableTag = ({ tag, onRemove }: { tag: string, onRemove: (t: string) => void }) => {
+const SortableTag: React.FC<{ tag: string, onRemove: (t: string) => void }> = ({ tag, onRemove }) => {
   const {
     attributes,
     listeners,
