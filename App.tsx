@@ -5,15 +5,16 @@ import { CollageDisplay } from './components/CollageDisplay';
 import { MosaicEditor } from './components/MosaicEditor';
 import { TagEditor } from './components/TagEditor';
 import { UpscaleEditor } from './components/UpscaleEditor';
+import { GifMaker } from './components/GifMaker';
 import { generateCollageLayout, generateBackgroundTexture, detectFaceCenters } from './services/geminiService';
 import { saveMixerState, loadMixerState } from './services/mixerStorage';
 import { ImageItem, CollageLayout, AppStatus, LogEntry, AspectRatio, WatermarkSettings, GlobalBlurSettings } from './types';
-import { AlertCircle, Layers, Grid2X2, Loader2, Tag, Maximize, Search } from 'lucide-react';
+import { AlertCircle, Layers, Grid2X2, Loader2, Tag, Maximize, Search, Film } from 'lucide-react';
 import { DanbooruSearch } from './components/DanbooruSearch';
 
 const MAX_IMAGES = 6;
 
-type AppMode = 'MIX' | 'MOSAIC' | 'TAGS' | 'UPSCALE' | 'DANBOORU_SEARCH';
+type AppMode = 'MIX' | 'MOSAIC' | 'TAGS' | 'UPSCALE' | 'DANBOORU_SEARCH' | 'GIF';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<AppMode>('MIX');
@@ -320,6 +321,12 @@ const App: React.FC = () => {
                 <Maximize size={16} /> UPSCALE
             </button>
             <button
+                onClick={() => setMode('GIF')}
+                className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold tracking-wide transition-all duration-300 ${mode === 'GIF' ? 'bg-white/10 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)]' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
+            >
+                <Film size={16} /> GIF
+            </button>
+            <button
                 onClick={() => setMode('DANBOORU_SEARCH')}
                 className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold tracking-wide transition-all duration-300 ${mode === 'DANBOORU_SEARCH' ? 'bg-white/10 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)]' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
             >
@@ -408,6 +415,11 @@ const App: React.FC = () => {
             /* UPSCALE MODE */
             <div className="w-full h-full animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <UpscaleEditor />
+            </div>
+        ) : mode === 'GIF' ? (
+            /* GIF MODE */
+            <div className="w-full h-full animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <GifMaker />
             </div>
         ) : (
             /* DANBOORU SEARCH MODE */

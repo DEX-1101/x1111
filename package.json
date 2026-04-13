@@ -17,6 +17,7 @@
     "@huggingface/hub": "^2.11.0",
     "@zip.js/zip.js": "^2.7.34",
     "express": "^5.2.1",
+    "gifenc": "^1.0.3",
     "jszip": "^3.10.1",
     "lucide-react": "^0.562.0",
     "motion": "^12.38.0",
@@ -33,6 +34,7 @@
     "@types/node": "^22.14.0",
     "@vercel/node": "^5.7.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "@webgpu/types": "^0.1.69",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }
