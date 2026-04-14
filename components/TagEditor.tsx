@@ -155,6 +155,23 @@ export const TagEditor: React.FC = () => {
   const [batchStatus, setBatchStatus] = useState<'idle' | 'processing' | 'done'>('idle');
   const [batchProgress, setBatchProgress] = useState(0);
   const [batchProgressText, setBatchProgressText] = useState('');
+  const [isTagSummaryOpen, setIsTagSummaryOpen] = useState(false);
+  const [tagSummary, setTagSummary] = useState<{tag: string, count: number}[]>([]);
+
+  useEffect(() => {
+    if (isTagSummaryOpen) {
+      const counts = new Map<string, number>();
+      files.forEach(file => {
+        file.tags.forEach(tag => {
+          counts.set(tag, (counts.get(tag) || 0) + 1);
+        });
+      });
+      const sorted = Array.from(counts.entries())
+        .map(([tag, count]) => ({ tag, count }))
+        .sort((a, b) => b.count - a.count);
+      setTagSummary(sorted);
+    }
+  }, [files, isTagSummaryOpen]);
 
   // WD Tagger State
   const [selectedModelId, setSelectedModelId] = useState(() => localStorage.getItem('wd_modelId') || 'eva02-v3');
@@ -1725,6 +1742,33 @@ export const TagEditor: React.FC = () => {
                   </button>
                 )}
               </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <button 
+                onClick={() => setIsTagSummaryOpen(!isTagSummaryOpen)}
+                className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium text-zinc-300 transition-colors flex items-center justify-center gap-2"
+              >
+                <Tag size={14} />
+                {isTagSummaryOpen ? 'Hide Tag Summary' : 'Show Tag Summary'}
+              </button>
+              
+              {isTagSummaryOpen && (
+                <div className="bg-black/50 border border-white/10 rounded-lg p-3 max-h-48 overflow-y-auto custom-scrollbar">
+                  {tagSummary.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {tagSummary.map(({ tag, count }) => (
+                        <div key={tag} className="flex items-center bg-white/5 border border-white/10 rounded px-2 py-1 text-xs">
+                          <span className="text-white">{tag}</span>
+                          <span className="text-zinc-500 ml-1.5 font-mono">({count})</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-zinc-500 text-center py-2">No tags found in the current dataset.</p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg border border-white/5 mt-auto">
