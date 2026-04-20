@@ -875,8 +875,21 @@ export const TagEditor: React.FC = () => {
         await writable.close();
         
         const newUrl = URL.createObjectURL(blob);
-        urlCache.current.set(fileEntry.name, newUrl);
+        urlCache.current.set(`${fileEntry.rootFolder}/${fileEntry.name}`, newUrl);
         setPreviewUrl(newUrl);
+
+        setImageState(prev => {
+          const newHistory = prev.history.slice(0, prev.index + 1);
+          newHistory.push(newUrl);
+          return { history: newHistory, index: newHistory.length - 1 };
+        });
+
+        setFiles(prev => {
+          const newFiles = [...prev];
+          const prevKey = newFiles[selectedIndex].updateKey || 0;
+          newFiles[selectedIndex] = { ...newFiles[selectedIndex], updateKey: prevKey + 1 };
+          return newFiles;
+        });
         
         setIsInpaintOpen(false);
       } catch (err) {
@@ -950,7 +963,7 @@ export const TagEditor: React.FC = () => {
   const currentImageHandle = files[selectedIndex]?.imageHandle;
   useEffect(() => {
     if (currentImageHandle) {
-      const name = currentImageHandle.name;
+      const name = `${files[selectedIndex].rootFolder}/${currentImageHandle.name}`;
       const cached = urlCache.current.get(name);
       
       const isNewImage = lastLoadedIndex.current !== selectedIndex;
@@ -983,7 +996,7 @@ export const TagEditor: React.FC = () => {
       setImageState({ history: [], index: 0 });
       lastLoadedIndex.current = -1;
     }
-  }, [currentImageHandle, selectedIndex]);
+  }, [currentImageHandle, selectedIndex, files]);
 
   // Preload adjacent images for instant switching
   useEffect(() => {
@@ -1158,7 +1171,7 @@ export const TagEditor: React.FC = () => {
           
           // Update preview URL to reflect new crop
           const newObjectUrl = URL.createObjectURL(croppedBlob);
-          urlCache.current.set(currentFile.name, newObjectUrl);
+          urlCache.current.set(`${currentFile.rootFolder}/${currentFile.name}`, newObjectUrl);
           setPreviewUrl(newObjectUrl);
           
           setImageState(prev => {
@@ -1194,7 +1207,7 @@ export const TagEditor: React.FC = () => {
       const previousUrl = imageState.history[newIndex];
       setImageState(prev => ({ ...prev, index: newIndex }));
       setPreviewUrl(previousUrl);
-      urlCache.current.set(files[selectedIndex].name, previousUrl);
+      urlCache.current.set(`${files[selectedIndex].rootFolder}/${files[selectedIndex].name}`, previousUrl);
       
       try {
         const response = await fetch(previousUrl);
@@ -1203,6 +1216,13 @@ export const TagEditor: React.FC = () => {
         const writableImg = await files[selectedIndex].imageHandle.createWritable();
         await writableImg.write(blob);
         await writableImg.close();
+
+        setFiles(prev => {
+          const newFiles = [...prev];
+          const prevKey = newFiles[selectedIndex].updateKey || 0;
+          newFiles[selectedIndex] = { ...newFiles[selectedIndex], updateKey: prevKey + 1 };
+          return newFiles;
+        });
       } catch (e) {
         console.error("Failed to write undo crop to disk", e);
       }
@@ -1215,7 +1235,7 @@ export const TagEditor: React.FC = () => {
       const nextUrl = imageState.history[newIndex];
       setImageState(prev => ({ ...prev, index: newIndex }));
       setPreviewUrl(nextUrl);
-      urlCache.current.set(files[selectedIndex].name, nextUrl);
+      urlCache.current.set(`${files[selectedIndex].rootFolder}/${files[selectedIndex].name}`, nextUrl);
       
       try {
         const response = await fetch(nextUrl);
@@ -1224,6 +1244,13 @@ export const TagEditor: React.FC = () => {
         const writableImg = await files[selectedIndex].imageHandle.createWritable();
         await writableImg.write(blob);
         await writableImg.close();
+
+        setFiles(prev => {
+          const newFiles = [...prev];
+          const prevKey = newFiles[selectedIndex].updateKey || 0;
+          newFiles[selectedIndex] = { ...newFiles[selectedIndex], updateKey: prevKey + 1 };
+          return newFiles;
+        });
       } catch (e) {
         console.error("Failed to write redo crop to disk", e);
       }
