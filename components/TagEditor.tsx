@@ -861,7 +861,7 @@ export const TagEditor: React.FC = () => {
   };
 
   const handleApplyInpaint = async () => {
-    if (!inpaintCanvasRef.current || !directoryHandle || selectedIndex === -1) return;
+    if (!inpaintCanvasRef.current || directoryHandles.length === 0 || selectedIndex === -1) return;
     
     const canvas = inpaintCanvasRef.current;
     canvas.toBlob(async (blob) => {
@@ -1131,7 +1131,7 @@ export const TagEditor: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (selectedIndex === -1 || !directoryHandle) return;
+    if (selectedIndex === -1 || directoryHandles.length === 0) return;
     setSaveStatus('saving');
     try {
       const currentFile = files[selectedIndex];
@@ -1317,13 +1317,13 @@ export const TagEditor: React.FC = () => {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-3 custom-scrollbar">
-          {Object.entries(
+          {(Object.entries(
             files.reduce((acc, file) => {
               if (!acc[file.rootFolder]) acc[file.rootFolder] = [];
               acc[file.rootFolder].push(file);
               return acc;
-            }, {} as Record<string, typeof files>)
-          ).map(([folder, folderFiles]) => (
+            }, {} as Record<string, any[]>)
+          ) as [string, any[]][]).map(([folder, folderFiles]) => (
             <div key={folder} className="mb-4 last:mb-0">
               <div className="text-[10px] font-bold text-zinc-500 mb-2 px-1 uppercase tracking-wider flex items-center justify-between">
                 <span className="truncate pr-2">{folder}</span>
