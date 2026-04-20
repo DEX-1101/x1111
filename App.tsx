@@ -345,88 +345,87 @@ const App: React.FC = () => {
 
       <div className={`w-full flex flex-col gap-6 transition-all duration-500 ${mode === 'MOSAIC' || mode === 'TAGS' || mode === 'UPSCALE' || mode === 'DANBOORU_SEARCH' ? 'flex-1 h-full max-w-[95%] pb-10' : 'max-w-6xl'}`}>
         
-        {mode === 'MIX' ? (
-            /* MIX MODE */
-            <div className="w-full space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <CollageDisplay 
-                    layout={layout} 
-                    images={images} 
-                    backgroundUrl={backgroundUrl}
-                    showBorders={showBorders}
-                    labelScale={labelScale}
-                    aspectRatio={aspectRatio}
-                    onLayoutUpdate={setLayout}
-                    watermark={watermark}
-                    onWatermarkUpdate={setWatermark}
-                    globalBlur={globalBlur}
-                />
+        {/* MIX MODE */}
+        <div className={`w-full space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 ${mode === 'MIX' ? 'block' : 'hidden'}`}>
+            <CollageDisplay 
+                layout={layout} 
+                images={images} 
+                backgroundUrl={backgroundUrl}
+                showBorders={showBorders}
+                labelScale={labelScale}
+                aspectRatio={aspectRatio}
+                onLayoutUpdate={setLayout}
+                watermark={watermark}
+                onWatermarkUpdate={setWatermark}
+                globalBlur={globalBlur}
+            />
 
-                {/* Error Message */}
-                {error && (
-                    <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex gap-3 items-start shadow-lg backdrop-blur-md">
-                        <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-                        <div className="flex-1 min-w-0">
-                            <h3 className="text-red-400 text-xs font-bold uppercase mb-1 tracking-wider">Generation Interrupted</h3>
-                            <p className="text-red-200/90 text-sm leading-relaxed break-words">
-                                {error}
-                            </p>
-                        </div>
+            {/* Error Message */}
+            {error && (
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex gap-3 items-start shadow-lg backdrop-blur-md">
+                    <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                        <h3 className="text-red-400 text-xs font-bold uppercase mb-1 tracking-wider">Generation Interrupted</h3>
+                        <p className="text-red-200/90 text-sm leading-relaxed break-words">
+                            {error}
+                        </p>
                     </div>
-                )}
-
-                {/* Unified Inputs & Actions Panel */}
-                <div className="w-full bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl rounded-3xl p-6">
-                    <ImageUploader 
-                        images={images} 
-                        onAddImages={handleAddImages} 
-                        onRemoveImage={handleRemoveImage}
-                        onClear={handleClearMix}
-                        maxImages={MAX_IMAGES}
-                        logs={logs}
-                        status={status}
-                        onGenerate={handleMix}
-                        onCancel={handleCancel}
-                        // Visual Props
-                        aspectRatio={aspectRatio}
-                        onAspectRatioChange={setAspectRatio}
-                        showBorders={showBorders}
-                        onToggleBorders={() => setShowBorders(prev => !prev)}
-                        labelScale={labelScale}
-                        onAdjustLabelScale={adjustLabelScale}
-                        isBusy={isBusy}
-                        watermark={watermark}
-                        onWatermarkChange={setWatermark}
-                        globalBlur={globalBlur}
-                        onGlobalBlurChange={setGlobalBlur}
-                    />
                 </div>
+            )}
+
+            {/* Unified Inputs & Actions Panel */}
+            <div className="w-full bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl rounded-3xl p-6">
+                <ImageUploader 
+                    images={images} 
+                    onAddImages={handleAddImages} 
+                    onRemoveImage={handleRemoveImage}
+                    onClear={handleClearMix}
+                    maxImages={MAX_IMAGES}
+                    logs={logs}
+                    status={status}
+                    onGenerate={handleMix}
+                    onCancel={handleCancel}
+                    // Visual Props
+                    aspectRatio={aspectRatio}
+                    onAspectRatioChange={setAspectRatio}
+                    showBorders={showBorders}
+                    onToggleBorders={() => setShowBorders(prev => !prev)}
+                    labelScale={labelScale}
+                    onAdjustLabelScale={adjustLabelScale}
+                    isBusy={isBusy}
+                    watermark={watermark}
+                    onWatermarkChange={setWatermark}
+                    globalBlur={globalBlur}
+                    onGlobalBlurChange={setGlobalBlur}
+                />
             </div>
-        ) : mode === 'MOSAIC' ? (
-            /* MOSAIC MODE */
-            <div className="w-full h-full animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <MosaicEditor />
-            </div>
-        ) : mode === 'TAGS' ? (
-            /* TAGS MODE */
-            <div className="w-full h-full animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <TagEditor />
-            </div>
-        ) : mode === 'UPSCALE' ? (
-            /* UPSCALE MODE */
-            <div className="w-full h-full animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <UpscaleEditor />
-            </div>
-        ) : mode === 'GIF' ? (
-            /* GIF MODE */
-            <div className="w-full h-full animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <GifMaker />
-            </div>
-        ) : (
-            /* DANBOORU SEARCH MODE */
-            <div className="w-full h-full animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <DanbooruSearch />
-            </div>
-        )}
+        </div>
+
+        {/* MOSAIC MODE */}
+        <div className={`w-full h-full animate-in fade-in slide-in-from-bottom-4 duration-500 ${mode === 'MOSAIC' ? 'block' : 'hidden'}`}>
+            <MosaicEditor />
+        </div>
+
+        {/* TAGS MODE */}
+        <div className={`w-full h-full animate-in fade-in slide-in-from-bottom-4 duration-500 ${mode === 'TAGS' ? 'block' : 'hidden'}`}>
+            <TagEditor />
+        </div>
+
+        {/* UPSCALE MODE */}
+        <div className={`w-full h-full animate-in fade-in slide-in-from-bottom-4 duration-500 ${mode === 'UPSCALE' ? 'block' : 'hidden'}`}>
+            <UpscaleEditor />
+        </div>
+
+        {/* GIF MODE */}
+        <div className={`w-full h-full animate-in fade-in slide-in-from-bottom-4 duration-500 ${mode === 'GIF' ? 'block' : 'hidden'}`}>
+            <GifMaker />
+        </div>
+
+        {/* DANBOORU SEARCH MODE */}
+        <div className={`w-full h-full animate-in fade-in slide-in-from-bottom-4 duration-500 ${mode === 'DANBOORU_SEARCH' ? 'block' : 'hidden'}`}>
+            <DanbooruSearch />
+        </div>
+
       </div>
     </div>
   );
