@@ -175,7 +175,8 @@ export const TagEditor: React.FC = () => {
   useEffect(() => {
     if (isTagSummaryOpen) {
       const counts = new Map<string, number>();
-      files.forEach(file => {
+      const filesToSummarize = targetFolder === 'All Folders' ? files : files.filter(f => f.rootFolder === targetFolder);
+      filesToSummarize.forEach(file => {
         file.tags.forEach(tag => {
           counts.set(tag, (counts.get(tag) || 0) + 1);
         });
@@ -185,7 +186,7 @@ export const TagEditor: React.FC = () => {
         .sort((a, b) => b.count - a.count);
       setTagSummary(sorted);
     }
-  }, [files, isTagSummaryOpen]);
+  }, [files, isTagSummaryOpen, targetFolder]);
 
   // WD Tagger State
   const [selectedModelId, setSelectedModelId] = useState(() => localStorage.getItem('wd_modelId') || 'eva02-v3');
@@ -547,13 +548,15 @@ export const TagEditor: React.FC = () => {
       }
 
       if (batchRename && !cancelRef.current) {
-        let counter = 1;
+        const counters: Record<string, number> = {};
         for (let i = 0; i < filesToProcess.length; i++) {
           if (cancelRef.current) {
             setBatchProgressText('Cancelled');
             break;
           }
           const file = filesToProcess[i];
+          if (!counters[file.rootFolder]) counters[file.rootFolder] = 1;
+          const counter = counters[file.rootFolder];
           const ext = file.name.substring(file.name.lastIndexOf('.'));
           const newImgName = `${counter}${ext}`;
           const newTxtName = `${counter}.txt`;
@@ -581,7 +584,7 @@ export const TagEditor: React.FC = () => {
             await file.parentHandle.removeEntry(file.textHandle.name);
             file.textHandle = newTxtHandle;
           }
-          counter++;
+          counters[file.rootFolder]++;
           
           currentStep++;
           setBatchProgress(Math.round((currentStep / totalSteps) * 100));
@@ -989,7 +992,7 @@ export const TagEditor: React.FC = () => {
     const preloadIndex = async (idx: number) => {
       if (idx >= 0 && idx < files.length) {
         const handle = files[idx].imageHandle;
-        const name = handle.name;
+        const name = `${files[idx].rootFolder}/${files[idx].name}`;
         if (!urlCache.current.has(name)) {
           try {
             const file = await handle.getFile();
@@ -1343,7 +1346,7 @@ export const TagEditor: React.FC = () => {
                       }}
                       className={`relative aspect-square rounded-lg overflow-hidden cursor-pointer border-2 transition-all duration-150 group ${idx === selectedIndex ? 'border-themePrimary shadow-[0_0_20px_var(--theme-primary-hover)] z-10 scale-105 brightness-110' : 'border-transparent hover:border-white/30 opacity-60 hover:opacity-100'}`}
                     >
-                      <Thumbnail imageHandle={file.imageHandle} name={file.name} urlCache={urlCache} updateKey={file.updateKey} />
+                      <Thumbnail imageHandle={file.imageHandle} name={`${file.rootFolder}/${file.name}`} urlCache={urlCache} updateKey={file.updateKey} />
                       <div className="absolute bottom-1 right-1 bg-black/80 backdrop-blur-sm text-[10px] px-1.5 py-0.5 rounded text-white font-medium border border-white/10">
                         {file.tags.length}
                       </div>
