@@ -22,7 +22,7 @@ import ReactCrop, { type Crop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { wdTagger, deleteModelFromDB, checkModelExists } from '../lib/wdTagger';
 import { ZipWriter, BlobWriter, BlobReader, TextReader } from '@zip.js/zip.js';
-import { uploadFile } from '@huggingface/hub';
+import { uploadFilesWithProgress } from '@huggingface/hub';
 
 interface FileEntry {
   imageHandle: FileSystemFileHandle;
@@ -221,6 +221,8 @@ export const TagEditor: React.FC = () => {
   const [zipStatus, setZipStatus] = useState<'idle' | 'zipping' | 'uploading' | 'done'>('idle');
   const [zipProgress, setZipProgress] = useState(0);
   const [zipProgressText, setZipProgressText] = useState('');
+  const [zipLog, setZipLog] = useState('');
+  const [zipFinalUrl, setZipFinalUrl] = useState('');
 
   // Inpaint State
   const [isInpaintOpen, setIsInpaintOpen] = useState(false);
@@ -699,15 +701,48 @@ export const TagEditor: React.FC = () => {
         
         const pathInRepo = hfFolder ? `${hfFolder}/${zipFilename || 'dataset.zip'}` : (zipFilename || 'dataset.zip');
         
-        await uploadFile({
+        setZipLog('Starting upload...');
+        setZipFinalUrl('');
+
+        const uploadGen = uploadFilesWithProgress({
           repo: { type: 'dataset', name: hfRepo },
           credentials: { accessToken: hfToken },
-          file: {
-            path: pathInRepo,
-            content: zipBlob
-          }
+          files: [
+            {
+              path: pathInRepo,
+              content: zipBlob
+            }
+          ],
+          commitTitle: `Upload ${zipFilename || 'dataset.zip'}`
         });
+
+        let res = await uploadGen.next();
+        while (!res.done) {
+          if (cancelRef.current) {
+            setZipStatus('idle');
+            setZipProgress(0);
+            setZipProgressText('');
+            return;
+          }
+          const event = res.value;
+          if (event.event === 'phase') {
+            setZipLog(`Phase: ${event.phase}...`);
+          } else if (event.event === 'fileProgress') {
+            const prog = Math.round(event.progress * 100);
+            setZipLog(`Uploading (${prog}%)...`);
+            setZipProgress(50 + (prog / 2));
+            setZipProgressText(`Uploading to HF (${prog}%)`);
+          }
+          res = await uploadGen.next();
+        }
         
+        if (res.value?.commit?.url) {
+          setZipFinalUrl(res.value.commit.url);
+          setZipLog('Upload complete.');
+        } else {
+          setZipLog('Upload complete (URL not provided).');
+        }
+
         setZipStatus('done');
         setZipProgress(100);
         setZipProgressText('Uploaded successfully!');
@@ -717,6 +752,7 @@ export const TagEditor: React.FC = () => {
         setZipStatus('idle');
         setZipProgress(0);
         setZipProgressText('');
+        // do not reset log and URL so user can copy it
       }, 3000);
 
     } catch (err) {
@@ -2077,6 +2113,22 @@ export const TagEditor: React.FC = () => {
                 className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/30"
               />
             </div>
+
+            {zipLog && (
+              <div className="space-y-1.5 mt-2">
+                <label className="text-sm font-medium text-zinc-300">Upload Log</label>
+                <div className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-xs text-zinc-400 font-mono break-words whitespace-pre-wrap">
+                  {zipLog}
+                  {zipFinalUrl && (
+                    <div className="mt-2 text-themePrimary">
+                      <a href={zipFinalUrl} target="_blank" rel="noopener noreferrer" className="hover:underline break-all">
+                        {zipFinalUrl}
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {zipStatus === 'uploading' || (zipStatus === 'zipping' && hfToken) ? (
               <button 
