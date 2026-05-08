@@ -736,8 +736,9 @@ export const TagEditor: React.FC = () => {
           res = await uploadGen.next();
         }
         
-        if (res.value?.commit?.url) {
-          setZipFinalUrl(res.value.commit.url);
+        if (res.value?.commit?.url || res.done) {
+          const directUrl = `https://huggingface.co/datasets/${hfRepo}/resolve/main/${pathInRepo}`;
+          setZipFinalUrl(directUrl);
           setZipLog('Upload complete.');
         } else {
           setZipLog('Upload complete (URL not provided).');
