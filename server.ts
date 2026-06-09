@@ -78,6 +78,73 @@ async function startServer() {
     }
   });
 
+  // Pixiv proxy endpoints
+  app.get('/api/pixiv/search', async (req, res) => {
+    const word = req.query.word as string;
+    if (!word) return res.status(400).send('Missing word');
+    try {
+      const encodedWord = encodeURIComponent(word);
+      const url = `https://www.pixiv.net/ajax/search/artworks/${encodedWord}?word=${encodedWord}&mode=all&p=1&lang=en`;
+      const pixivRes = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Referer': 'https://www.pixiv.net/'
+        }
+      });
+      if (!pixivRes.ok) throw new Error('Pixiv search failed');
+      const data = await pixivRes.json();
+      res.json(data);
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  app.get('/api/pixiv/illust', async (req, res) => {
+    const id = req.query.id as string;
+    if (!id) return res.status(400).send('Missing id');
+    try {
+      const url = `https://www.pixiv.net/ajax/illust/${id}?lang=en`;
+      const pixivRes = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Referer': 'https://www.pixiv.net/'
+        }
+      });
+      if (!pixivRes.ok) throw new Error('Pixiv illust details failed');
+      const data = await pixivRes.json();
+      res.json(data);
+    } catch (e) {
+      res.status(500).json({ error: String(e) });
+    }
+  });
+
+  app.get('/api/pixiv/image', async (req, res) => {
+    const imageUrl = req.query.url as string;
+    if (!imageUrl) return res.status(400).send('Missing url parameter');
+    try {
+      const imageResponse = await fetch(imageUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Referer': 'https://www.pixiv.net/',
+        },
+      });
+      if (!imageResponse.ok) {
+        return res.status(imageResponse.status).send(`Failed to fetch image`);
+      }
+      const contentType = imageResponse.headers.get('content-type');
+      if (contentType) res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      const buffer = await imageResponse.arrayBuffer();
+      res.send(Buffer.from(buffer));
+    } catch (error) {
+      res.status(500).send('Internal Server Error');
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

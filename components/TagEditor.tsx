@@ -724,10 +724,10 @@ export const TagEditor: React.FC = () => {
             setZipProgressText('');
             return;
           }
-          const event = res.value;
-          if (event.event === 'phase') {
+          const event = res.value as any;
+          if (event && event.event === 'phase') {
             setZipLog(`Phase: ${event.phase}...`);
-          } else if (event.event === 'fileProgress') {
+          } else if (event && event.event === 'fileProgress') {
             const prog = Math.round(event.progress * 100);
             setZipLog(`Uploading (${prog}%)...`);
             setZipProgress(50 + (prog / 2));
