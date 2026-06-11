@@ -128,6 +128,9 @@ export const PixivSearch: React.FC = () => {
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [isSearchingTags, setIsSearchingTags] = useState(false);
   const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
+  const [collectedTags, setCollectedTags] = useState<{tag: string, translation?: string}[]>([]);
+  const [isCopiedAll, setIsCopiedAll] = useState(false);
+  const [showLimitWarning, setShowLimitWarning] = useState(false);
 
   const [allFoundItems, setAllFoundItems] = useState<any[]>([]);
   const [visibleCount, setVisibleCount] = useState(10);
@@ -346,6 +349,20 @@ export const PixivSearch: React.FC = () => {
   const handleCopyTag = (originalText: string, translatedText: string = '') => {
     navigator.clipboard.writeText(originalText);
     setCopiedStates(prev => ({ ...prev, [originalText]: true }));
+    setCollectedTags(prev => {
+      if (!prev.find(t => t.tag === originalText)) {
+        const currentChars = prev.map(t => t.tag).join(' ').length;
+        const newChars = currentChars > 0 ? currentChars + 1 + originalText.length : originalText.length;
+        
+        if (newChars > 30) {
+          setShowLimitWarning(true);
+          setTimeout(() => setShowLimitWarning(false), 3000);
+          return prev;
+        }
+        return [...prev, { tag: originalText, translation: translatedText }];
+      }
+      return prev;
+    });
     setTimeout(() => {
       setCopiedStates(prev => ({ ...prev, [originalText]: false }));
     }, 2000);
@@ -422,7 +439,7 @@ export const PixivSearch: React.FC = () => {
   };
 
   return (
-    <div className="w-full flex-1">
+    <div className={`w-full flex-1 transition-all duration-300 ${collectedTags.length > 0 ? 'pb-52' : ''}`}>
        <div className="w-full flex items-center gap-2 mb-8 mx-auto sticky top-4 z-50 max-w-4xl" ref={dropdownRef}>
           <div className="flex-1 relative">
              <form 
@@ -729,6 +746,70 @@ export const PixivSearch: React.FC = () => {
              </div>
           )}
        </div>
+
+       <AnimatePresence>
+          {collectedTags.length > 0 && (
+             <motion.div
+                initial={{ opacity: 0, y: 50, scale: 0.9, x: "-50%" }}
+                animate={{ opacity: 1, y: 0, scale: 1, x: "-50%" }}
+                exit={{ opacity: 0, y: 50, scale: 0.9, x: "-50%" }}
+                className="fixed bottom-6 left-1/2 z-50 bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-3 w-[calc(100vw-3rem)] md:w-[640px] pointer-events-auto"
+             >
+                <AnimatePresence>
+                   {showLimitWarning && (
+                      <motion.div
+                         initial={{ opacity: 0, y: 10, scale: 0.9, x: "-50%" }}
+                         animate={{ opacity: 1, y: 0, scale: 1, x: "-50%" }}
+                         exit={{ opacity: 0, y: 10, scale: 0.9, x: "-50%" }}
+                         className="absolute -top-14 left-1/2 bg-red-500/90 text-white px-4 py-2 rounded-xl shadow-lg border border-red-400 backdrop-blur-md text-sm font-medium whitespace-nowrap"
+                      >
+                         Limit reached! Maximum 30 characters allowed.
+                      </motion.div>
+                   )}
+                </AnimatePresence>
+                <div className="flex flex-wrap gap-1.5 mb-3 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+                   {collectedTags.map(t => (
+                      <span key={t.tag} className="bg-black/50 border border-white/5 text-sm text-gray-200 px-2.5 py-1 rounded-lg flex items-center gap-1.5 group">
+                         {t.tag}
+                         {t.translation && t.translation !== t.tag && (
+                            <span className="text-[#94a3b8] text-xs">({t.translation})</span>
+                         )}
+                         <button 
+                            onClick={() => setCollectedTags(prev => prev.filter(x => x.tag !== t.tag))} 
+                            className="text-[#64748b] hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1"
+                         >
+                            <X className="w-3.5 h-3.5" />
+                         </button>
+                      </span>
+                   ))}
+                </div>
+                <div className="flex items-center gap-2">
+                   <button
+                      onClick={() => {
+                         navigator.clipboard.writeText(collectedTags.map(t => t.tag).join(' '));
+                         setIsCopiedAll(true);
+                         setTimeout(() => setIsCopiedAll(false), 2000);
+                      }}
+                      className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium transition-colors ${
+                         isCopiedAll 
+                            ? 'bg-green-600/30 text-green-400 border border-green-500/50 hover:bg-green-600/40' 
+                            : 'bg-white/10 hover:bg-white/20 text-white'
+                      }`}
+                   >
+                      {isCopiedAll ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                      {isCopiedAll ? 'Copied!' : 'Copy All'}
+                   </button>
+                   <button 
+                      onClick={() => setCollectedTags([])}
+                      className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-colors shrink-0"
+                      title="Clear all"
+                   >
+                      <X className="w-4 h-4" />
+                   </button>
+                </div>
+             </motion.div>
+          )}
+       </AnimatePresence>
     </div>
   );
 };
