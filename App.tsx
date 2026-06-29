@@ -9,13 +9,14 @@ import { GifMaker } from './components/GifMaker';
 import { generateCollageLayout, generateBackgroundTexture, detectFaceCenters } from './services/geminiService';
 import { saveMixerState, loadMixerState } from './services/mixerStorage';
 import { ImageItem, CollageLayout, AppStatus, LogEntry, AspectRatio, WatermarkSettings, GlobalBlurSettings } from './types';
-import { AlertCircle, Layers, Grid2X2, Loader2, Tag, Maximize, Search, Film } from 'lucide-react';
+import { AlertCircle, Layers, Grid2X2, Loader2, Tag, Maximize, Search, Film, UserCircle } from 'lucide-react';
 import { DanbooruSearch } from './components/DanbooruSearch';
 import { PixivSearch } from './components/PixivSearch';
+import { AdetailerEditor } from './components/AdetailerEditor';
 
 const MAX_IMAGES = 6;
 
-type AppMode = 'MIX' | 'MOSAIC' | 'TAGS' | 'UPSCALE' | 'DANBOORU_SEARCH' | 'PIXIV_SEARCH' | 'GIF';
+type AppMode = 'MIX' | 'MOSAIC' | 'TAGS' | 'UPSCALE' | 'DANBOORU_SEARCH' | 'PIXIV_SEARCH' | 'GIF' | 'ADETAILER';
 
 const App: React.FC = () => {
   const [mode, setMode] = useState<AppMode>('MIX');
@@ -339,6 +340,12 @@ const App: React.FC = () => {
             >
                 <Search size={16} /> PIXIV
             </button>
+            <button
+                onClick={() => setMode('ADETAILER')}
+                className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold tracking-wide transition-all duration-300 ${mode === 'ADETAILER' ? 'bg-white/10 text-white shadow-[0_0_20px_rgba(255,255,255,0.05)]' : 'text-zinc-400 hover:text-white hover:bg-white/5'}`}
+            >
+                <UserCircle size={16} /> ADETAILER
+            </button>
          </div>
          
          {/* Theme Switcher */}
@@ -350,7 +357,7 @@ const App: React.FC = () => {
          </div>
       </div>
 
-      <div className={`w-full flex flex-col gap-6 transition-all duration-500 ${mode === 'MOSAIC' || mode === 'TAGS' || mode === 'UPSCALE' || mode === 'DANBOORU_SEARCH' || mode === 'PIXIV_SEARCH' ? 'flex-1 h-full max-w-[95%] pb-10' : 'max-w-6xl'}`}>
+      <div className={`w-full flex flex-col gap-6 transition-all duration-500 ${mode === 'MOSAIC' || mode === 'TAGS' || mode === 'UPSCALE' || mode === 'DANBOORU_SEARCH' || mode === 'PIXIV_SEARCH' || mode === 'ADETAILER' ? 'flex-1 h-full max-w-[95%] pb-10' : 'max-w-6xl'}`}>
         
         {/* MIX MODE */}
         <div className={`w-full space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 ${mode === 'MIX' ? 'block' : 'hidden'}`}>
@@ -436,6 +443,11 @@ const App: React.FC = () => {
         {/* PIXIV SEARCH MODE */}
         <div className={`w-full h-full animate-in fade-in slide-in-from-bottom-4 duration-500 ${mode === 'PIXIV_SEARCH' ? 'block' : 'hidden'}`}>
             <PixivSearch />
+        </div>
+
+        {/* ADETAILER MODE */}
+        <div className={`w-full h-full animate-in fade-in slide-in-from-bottom-4 duration-500 ${mode === 'ADETAILER' ? 'block' : 'hidden'}`}>
+            <AdetailerEditor />
         </div>
 
       </div>
