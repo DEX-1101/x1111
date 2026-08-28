@@ -1746,6 +1746,7 @@ export const TagEditor: React.FC = () => {
                 <option value="eva02-v3">EVA02 Large v3 (~1.2GB)</option>
                 <option value="vit-v3">ViT Large v3 (~1.2GB)</option>
                 <option value="swinv2-v2">SwinV2 v2 (~1.1GB)</option>
+                <option value="convnextv2-huge">ConvNeXtV2 Huge (~2.7GB)</option>
               </select>
             </div>
 

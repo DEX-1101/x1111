@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, Loader2, ExternalLink, Copy, AlertCircle, RefreshCw, Layers, Check, History, Upload, Download, X, Hash, User, Copyright, Tag as TagIcon } from 'lucide-react';
+import { Search, ArrowUp, Loader2, ExternalLink, Copy, AlertCircle, RefreshCw, Layers, Check, History, Upload, Download, X, Hash, User, Copyright, Tag as TagIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDebounce } from 'use-debounce';
 import { searchTags } from '../lib/danbooruApi';
@@ -810,6 +810,15 @@ export const PixivSearch: React.FC = () => {
              </motion.div>
           )}
        </AnimatePresence>
+       
+      {/* Scroll to top button */}
+      <button
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        className="fixed bottom-6 right-6 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full border border-white/20 shadow-xl backdrop-blur-md transition-all z-50 flex items-center justify-center group"
+        title="Scroll to top"
+      >
+        <ArrowUp className="w-5 h-5 group-hover:-translate-y-1 transition-transform" />
+      </button>
     </div>
   );
 };

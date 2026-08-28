@@ -3,7 +3,7 @@ import {
   Search, Image as ImageIcon, Info, Shield, ShieldAlert, Loader2, 
   Tag as TagIcon, User, Copyright, Hash, X, Copy, Check, 
   ExternalLink, ChevronLeft, ChevronRight, Play, Pause, 
-  Volume2, VolumeX, Download 
+  Volume2, VolumeX, Download, ArrowUp 
 } from 'lucide-react';
 import { useDebounce } from 'use-debounce';
 import { searchTags, getTagWiki, getPostsByTag, getTag, getPostById } from '../lib/danbooruApi';
@@ -485,7 +485,14 @@ export const DanbooruSearch: React.FC = () => {
   
   const [selectedImagePost, setSelectedImagePost] = useState<Post | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [postsPerPage, setPostsPerPage] = useState(50);
+  const [postsPerPage, setPostsPerPage] = useState(() => {
+    const saved = localStorage.getItem('danbooru_limit');
+    return saved !== null ? Number(saved) : 50;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('danbooru_limit', postsPerPage.toString());
+  }, [postsPerPage]);
   const [pageInput, setPageInput] = useState('1');
   const [showUnderscores, setShowUnderscores] = useState(() => {
     const saved = localStorage.getItem('showUnderscores');
@@ -1222,17 +1229,18 @@ export const DanbooruSearch: React.FC = () => {
                 </div>
 
                 {posts.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+                  <div className="columns-1 sm:columns-2 md:columns-3 xl:columns-4 2xl:columns-5 gap-4 space-y-4">
                     {posts.map((post) => (
                       <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         key={post.id}
-                        className="relative group rounded-xl overflow-hidden bg-white/5 border border-white/10 aspect-[3/4]"
+                        className="relative group rounded-xl overflow-hidden bg-white/5 border border-white/10 break-inside-avoid w-full inline-block"
                       >
                         <div 
                           onClick={() => setSelectedImagePost(post)}
-                          className="w-full h-full cursor-pointer"
+                          className="w-full h-full cursor-pointer relative"
+                          style={{ aspectRatio: post.image_width && post.image_height ? `${post.image_width} / ${post.image_height}` : 'auto' }}
                         >
                           <button 
                             onClick={(e) => {
@@ -1246,9 +1254,9 @@ export const DanbooruSearch: React.FC = () => {
                           </button>
 
                           {isVideo(post.file_ext) && !post.preview_file_url ? (
-                            <video src={post.large_file_url || post.file_url} autoPlay loop muted playsInline className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                            <video src={post.large_file_url || post.file_url} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                           ) : (
-                            <img src={post.preview_file_url || post.large_file_url || post.file_url} alt={`Post ${post.id}`} loading="lazy" referrerPolicy="no-referrer" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                            <img src={post.preview_file_url || post.large_file_url || post.file_url} alt={`Post ${post.id}`} loading="lazy" referrerPolicy="no-referrer" className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                           )}
                           
                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
@@ -1423,6 +1431,15 @@ export const DanbooruSearch: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+      
+      {/* Scroll to top button */}
+      <button
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        className="fixed bottom-6 right-6 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full border border-white/20 shadow-xl backdrop-blur-md transition-all z-50 flex items-center justify-center group"
+        title="Scroll to top"
+      >
+        <ArrowUp className="w-5 h-5 group-hover:-translate-y-1 transition-transform" />
+      </button>
     </div>
   );
 };
