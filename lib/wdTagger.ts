@@ -332,7 +332,9 @@ export class WDTagger {
   }
 
   preprocessImage(image: HTMLImageElement): Float32Array {
-    const targetSize = 448;
+    const isConvNextV2Huge = this.currentModelId === 'convnextv2-huge';
+    const targetSize = isConvNextV2Huge ? 512 : 448;
+    
     const canvas = document.createElement('canvas');
     canvas.width = targetSize;
     canvas.height = targetSize;
@@ -360,10 +362,21 @@ export class WDTagger {
       const g = data[i * 4 + 1];
       const b = data[i * 4 + 2];
       
-      // WD Tagger models expect NHWC layout, BGR format, values 0-255
-      float32Data[i * 3] = b;
-      float32Data[i * 3 + 1] = g;
-      float32Data[i * 3 + 2] = r;
+      if (isConvNextV2Huge) {
+        // NCHW layout, RGB format, 0-1 range, normalized with mean/std
+        const rNorm = ((r / 255.0) - 0.485) / 0.229;
+        const gNorm = ((g / 255.0) - 0.456) / 0.224;
+        const bNorm = ((b / 255.0) - 0.406) / 0.225;
+        
+        float32Data[i] = rNorm;
+        float32Data[targetSize * targetSize + i] = gNorm;
+        float32Data[targetSize * targetSize * 2 + i] = bNorm;
+      } else {
+        // WD Tagger models expect NHWC layout, BGR format, values 0-255
+        float32Data[i * 3] = b;
+        float32Data[i * 3 + 1] = g;
+        float32Data[i * 3 + 2] = r;
+      }
     }
     
     return float32Data;
@@ -373,7 +386,14 @@ export class WDTagger {
     if (!this.session) throw new Error("Session not initialized");
     
     const inputData = this.preprocessImage(image);
-    const tensor = new ort.Tensor('float32', inputData, [1, 448, 448, 3]);
+    
+    const isConvNextV2Huge = this.currentModelId === 'convnextv2-huge';
+    const targetSize = isConvNextV2Huge ? 512 : 448;
+    const dims = isConvNextV2Huge 
+      ? [1, 3, targetSize, targetSize] 
+      : [1, targetSize, targetSize, 3];
+      
+    const tensor = new ort.Tensor('float32', inputData, dims);
     
     const feeds: Record<string, ort.Tensor> = {};
     feeds[this.session.inputNames[0]] = tensor;
