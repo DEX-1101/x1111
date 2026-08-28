@@ -41,7 +41,8 @@ export const MODELS = {
     tagsUrl: 'https://huggingface.co/itterative/convnextv2_huge.dbv4-full-onnx/raw/main/selected_tags.csv',
     size: '2.7GB',
     sizeBytes: 2770470128,
-    useUrlDirectly: true
+    useUrlDirectly: true,
+    externalDataUrl: 'https://huggingface.co/itterative/convnextv2_huge.dbv4-full-onnx/resolve/main/model.onnx_data'
   }
 };
 
@@ -98,7 +99,7 @@ async function saveModelToDB(modelId: string, buffer: ArrayBuffer): Promise<void
 export async function deleteModelFromDB(modelId: string): Promise<void> {
   try {
     const db = await openDB();
-    return new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
       const request = store.delete(`model_${modelId}.onnx`);
@@ -108,11 +109,47 @@ export async function deleteModelFromDB(modelId: string): Promise<void> {
   } catch (e) {
     console.warn("Failed to delete model from IndexedDB", e);
   }
+
+  try {
+    const cache = await caches.open('wd-models-cache-v1');
+    const modelInfo = MODELS[modelId as keyof typeof MODELS];
+    if (modelInfo) {
+      await cache.delete(modelInfo.url);
+      // @ts-ignore
+      if (modelInfo.externalDataUrl) {
+        // @ts-ignore
+        await cache.delete(modelInfo.externalDataUrl);
+      }
+    }
+  } catch (e) {
+    console.warn("Failed to delete model from Cache API", e);
+  }
 }
 
 export async function checkModelExists(modelId: string): Promise<boolean> {
-  const model = await getModelFromDB(modelId);
-  return model !== null;
+  const modelInfo = MODELS[modelId as keyof typeof MODELS];
+  if (!modelInfo) return false;
+  
+  // @ts-ignore
+  if (modelInfo.useUrlDirectly) {
+    try {
+      const cache = await caches.open('wd-models-cache-v1');
+      const hasMain = await cache.match(modelInfo.url);
+      if (!hasMain) return false;
+      // @ts-ignore
+      if (modelInfo.externalDataUrl) {
+        // @ts-ignore
+        const hasExternal = await cache.match(modelInfo.externalDataUrl);
+        return !!hasExternal;
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  } else {
+    const model = await getModelFromDB(modelId);
+    return model !== null;
+  }
 }
 
 export class WDTagger {
@@ -196,28 +233,96 @@ export class WDTagger {
       }
       modelSource = modelBuffer;
     } else {
-      if (onProgress) onProgress(100, 'Using model URL directly for streaming...');
+      const fetchAndCache = async (url: string, label: string, sizeBytes: number) => {
+        let cache: Cache | undefined;
+        try { cache = await caches.open('wd-models-cache-v1'); } catch (e) {}
+
+        if (cache) {
+          const cachedResponse = await cache.match(url);
+          if (cachedResponse) {
+            if (onProgress) onProgress(100, `Loaded ${label} from cache.`);
+            const blob = await cachedResponse.blob();
+            return URL.createObjectURL(blob);
+          }
+        }
+
+        if (onProgress) onProgress(0, `Downloading ${label}...`);
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to fetch ${label}: ${response.statusText}`);
+
+        const total = sizeBytes || 0;
+        let loaded = 0;
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error(`Failed to get reader for ${label}`);
+
+        const stream = new ReadableStream({
+          async pull(controller) {
+            const { done, value } = await reader.read();
+            if (done) {
+              controller.close();
+              return;
+            }
+            loaded += value.length;
+            if (total && onProgress) {
+              onProgress(Math.round((loaded / total) * 100), `Downloading ${label} (${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB)...`);
+            }
+            controller.enqueue(value);
+          }
+        });
+
+        const streamResponse = new Response(stream, { headers: response.headers });
+        
+        if (cache) {
+          await cache.put(url, streamResponse);
+          const cachedResponse = await cache.match(url);
+          const blob = await cachedResponse!.blob();
+          return URL.createObjectURL(blob);
+        } else {
+          const blob = await streamResponse.blob();
+          return URL.createObjectURL(blob);
+        }
+      };
+
+      // @ts-ignore
+      modelSource = await fetchAndCache(modelInfo.url, 'model.onnx', 324944); // 324KB for onnx
+
+      // @ts-ignore
+      if (modelInfo.externalDataUrl) {
+        // @ts-ignore
+        modelInfo.localExternalDataUrl = await fetchAndCache(modelInfo.externalDataUrl, 'model.onnx_data', modelInfo.sizeBytes);
+      }
     }
 
     if (onProgress) onProgress(100, 'Initializing ONNX session...');
     
+    const sessionOptions: ort.InferenceSession.SessionOptions = {
+      executionProviders: ['webgpu']
+    };
+    
+    // @ts-ignore
+    if (modelInfo.localExternalDataUrl) {
+      sessionOptions.externalData = [
+        {
+          path: 'model.onnx_data',
+          // @ts-ignore
+          data: modelInfo.localExternalDataUrl
+        }
+      ];
+    }
+    
     try {
-      this.session = await ort.InferenceSession.create(modelSource, {
-        executionProviders: ['webgpu']
-      });
+      this.session = await ort.InferenceSession.create(modelSource, sessionOptions);
       this.currentProvider = 'webgpu';
     } catch (e) {
       console.warn("WebGPU failed, trying WebGL", e);
       try {
-        this.session = await ort.InferenceSession.create(modelSource, {
-          executionProviders: ['webgl']
-        });
+        sessionOptions.executionProviders = ['webgl'];
+        this.session = await ort.InferenceSession.create(modelSource, sessionOptions);
         this.currentProvider = 'webgl';
       } catch (e2) {
         console.warn("WebGL failed, falling back to WASM", e2);
-        this.session = await ort.InferenceSession.create(modelSource, {
-          executionProviders: ['wasm']
-        });
+        sessionOptions.executionProviders = ['wasm'];
+        this.session = await ort.InferenceSession.create(modelSource, sessionOptions);
         this.currentProvider = 'wasm';
       }
     }
