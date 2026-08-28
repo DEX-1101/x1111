@@ -52,8 +52,6 @@ const App: React.FC = () => {
       amount: 8
   });
   
-  const [theme, setTheme] = useState<'default'|'blue'|'purple'|'red'>(() => (localStorage.getItem('app_theme') as any) || 'default');
-  
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Persistence: Load
@@ -78,11 +76,6 @@ const App: React.FC = () => {
         setIsAppLoading(false);
     });
   }, []);
-
-  useEffect(() => {
-    document.body.setAttribute('data-theme', theme);
-    localStorage.setItem('app_theme', theme);
-  }, [theme]);
 
   const originalTitleRef = useRef(document.title);
   useEffect(() => {
@@ -346,14 +339,6 @@ const App: React.FC = () => {
             >
                 <UserCircle size={16} /> ADETAILER
             </button>
-         </div>
-         
-         {/* Theme Switcher */}
-         <div className="ml-4 flex bg-white/5 backdrop-blur-md p-1.5 rounded-2xl border border-white/10 shadow-2xl gap-2">
-            <button onClick={() => setTheme('default')} className={`w-5 h-5 rounded-full bg-white border-2 transition-all ${theme === 'default' ? 'border-zinc-400 scale-110' : 'border-transparent hover:scale-110'}`} title="Default Theme" />
-            <button onClick={() => setTheme('blue')} className={`w-5 h-5 rounded-full bg-blue-600 border-2 transition-all ${theme === 'blue' ? 'border-white scale-110' : 'border-transparent hover:scale-110'}`} title="Blue Theme" />
-            <button onClick={() => setTheme('purple')} className={`w-5 h-5 rounded-full bg-purple-600 border-2 transition-all ${theme === 'purple' ? 'border-white scale-110' : 'border-transparent hover:scale-110'}`} title="Purple Theme" />
-            <button onClick={() => setTheme('red')} className={`w-5 h-5 rounded-full bg-red-600 border-2 transition-all ${theme === 'red' ? 'border-white scale-110' : 'border-transparent hover:scale-110'}`} title="Red Theme" />
          </div>
       </div>
 
