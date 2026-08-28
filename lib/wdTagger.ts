@@ -34,6 +34,14 @@ export const MODELS = {
     tagsUrl: 'https://huggingface.co/SmilingWolf/wd-v1-4-swinv2-tagger-v2/raw/main/selected_tags.csv',
     size: '1.1GB',
     sizeBytes: 1100000000
+  },
+  'convnextv2-huge': {
+    name: 'ConvNeXtV2 Huge',
+    url: 'https://huggingface.co/itterative/convnextv2_huge.dbv4-full-onnx/resolve/main/model.onnx',
+    tagsUrl: 'https://huggingface.co/itterative/convnextv2_huge.dbv4-full-onnx/raw/main/selected_tags.csv',
+    size: '2.7GB',
+    sizeBytes: 2770470128,
+    useUrlDirectly: true
   }
 };
 
@@ -139,65 +147,75 @@ export class WDTagger {
     }
 
     if (onProgress) onProgress(0, 'Checking cache...');
-    let modelBuffer = await getModelFromDB(modelId);
     
-    if (!modelBuffer) {
-      if (onProgress) onProgress(0, `Downloading model (${modelInfo.size})...`);
-      const response = await fetch(modelInfo.url);
-      if (!response.ok) throw new Error(`Failed to fetch model: ${response.statusText}`);
+    // @ts-ignore
+    const useUrlDirectly = modelInfo.useUrlDirectly;
+    let modelSource: string | ArrayBuffer = modelInfo.url;
+    
+    if (!useUrlDirectly) {
+      let modelBuffer = await getModelFromDB(modelId);
       
-      const contentLength = response.headers.get('content-length');
-      const total = contentLength ? parseInt(contentLength, 10) : modelInfo.sizeBytes;
-      let loaded = 0;
-      
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("Failed to get reader");
-      
-      const chunks: Uint8Array[] = [];
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (value) {
-          chunks.push(value);
-          loaded += value.length;
-          if (onProgress) {
-            onProgress(Math.round((loaded / total) * 100), `Downloading model (${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB)...`);
+      if (!modelBuffer) {
+        if (onProgress) onProgress(0, `Downloading model (${modelInfo.size})...`);
+        const response = await fetch(modelInfo.url);
+        if (!response.ok) throw new Error(`Failed to fetch model: ${response.statusText}`);
+        
+        const contentLength = response.headers.get('content-length');
+        const total = contentLength ? parseInt(contentLength, 10) : modelInfo.sizeBytes;
+        let loaded = 0;
+        
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error("Failed to get reader");
+        
+        const chunks: Uint8Array[] = [];
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) {
+            chunks.push(value);
+            loaded += value.length;
+            if (onProgress) {
+              onProgress(Math.round((loaded / total) * 100), `Downloading model (${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB)...`);
+            }
           }
         }
+        
+        if (onProgress) onProgress(100, 'Processing model buffer...');
+        const buffer = new Uint8Array(loaded);
+        let offset = 0;
+        for (const chunk of chunks) {
+          buffer.set(chunk, offset);
+          offset += chunk.length;
+        }
+        modelBuffer = buffer.buffer;
+        
+        if (onProgress) onProgress(100, 'Saving to cache...');
+        await saveModelToDB(modelId, modelBuffer);
+      } else {
+        if (onProgress) onProgress(100, 'Model loaded from cache.');
       }
-      
-      if (onProgress) onProgress(100, 'Processing model buffer...');
-      const buffer = new Uint8Array(loaded);
-      let offset = 0;
-      for (const chunk of chunks) {
-        buffer.set(chunk, offset);
-        offset += chunk.length;
-      }
-      modelBuffer = buffer.buffer;
-      
-      if (onProgress) onProgress(100, 'Saving to cache...');
-      await saveModelToDB(modelId, modelBuffer);
+      modelSource = modelBuffer;
     } else {
-      if (onProgress) onProgress(100, 'Model loaded from cache.');
+      if (onProgress) onProgress(100, 'Using model URL directly for streaming...');
     }
 
     if (onProgress) onProgress(100, 'Initializing ONNX session...');
     
     try {
-      this.session = await ort.InferenceSession.create(modelBuffer, {
+      this.session = await ort.InferenceSession.create(modelSource, {
         executionProviders: ['webgpu']
       });
       this.currentProvider = 'webgpu';
     } catch (e) {
       console.warn("WebGPU failed, trying WebGL", e);
       try {
-        this.session = await ort.InferenceSession.create(modelBuffer, {
+        this.session = await ort.InferenceSession.create(modelSource, {
           executionProviders: ['webgl']
         });
         this.currentProvider = 'webgl';
       } catch (e2) {
         console.warn("WebGL failed, falling back to WASM", e2);
-        this.session = await ort.InferenceSession.create(modelBuffer, {
+        this.session = await ort.InferenceSession.create(modelSource, {
           executionProviders: ['wasm']
         });
         this.currentProvider = 'wasm';
