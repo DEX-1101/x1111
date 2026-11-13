@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream';
-import type { ServerResponse } from 'node:http';
+import type { ServerResponse, IncomingHttpHeaders } from 'node:http';
 
 /**
  * Hosts we are willing to fetch images from. Without this allow-list the proxy
@@ -26,10 +26,14 @@ const BROWSER_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 const API_UA = process.env.DANBOORU_USER_AGENT || 'DanbooruTagExplorer/1.0 (goblin.gabonga.x1@gmail.com)';
 
-async function fetchWithFallback(url: URL, kind: 'danbooru' | 'pixiv', signal: AbortSignal) {
+async function fetchWithFallback(url: URL, kind: 'danbooru' | 'pixiv', signal: AbortSignal, range?: string, ifRange?: string) {
+  // Range is what makes video seeking work: without it the browser can only play from byte 0.
+  const rangeHeaders: Record<string, string> = {};
+  if (range) rangeHeaders['Range'] = range;
+  if (range && ifRange) rangeHeaders['If-Range'] = ifRange;
   if (kind === 'pixiv') {
     return fetch(url, {
-      headers: { 'User-Agent': BROWSER_UA, Referer: 'https://www.pixiv.net/' },
+      headers: { 'User-Agent': BROWSER_UA, Referer: 'https://www.pixiv.net/', ...rangeHeaders },
       signal,
     });
   }
@@ -42,7 +46,7 @@ async function fetchWithFallback(url: URL, kind: 'danbooru' | 'pixiv', signal: A
   ];
   let res!: Response;
   for (const headers of attempts) {
-    res = await fetch(url, { headers: { Accept: 'image/*,*/*;q=0.8', ...headers }, signal });
+    res = await fetch(url, { headers: { Accept: 'image/*,video/*,*/*;q=0.8', ...headers, ...rangeHeaders }, signal });
     if (res.status !== 403) break;
     await res.body?.cancel().catch(() => {});
   }
@@ -56,7 +60,8 @@ async function fetchWithFallback(url: URL, kind: 'danbooru' | 'pixiv', signal: A
 export async function pipeImage(
   rawUrl: string | undefined,
   kind: 'danbooru' | 'pixiv',
-  res: ServerResponse & { status?: (code: number) => any }
+  res: ServerResponse & { status?: (code: number) => any },
+  reqHeaders: IncomingHttpHeaders = {}
 ) {
   const send = (code: number, msg: string) => {
     res.statusCode = code;
@@ -73,7 +78,14 @@ export async function pipeImage(
   res.on('close', () => controller.abort());
 
   try {
-    const upstream = await fetchWithFallback(url, kind, controller.signal);
+    const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+    const upstream = await fetchWithFallback(url, kind, controller.signal, one(reqHeaders.range), one(reqHeaders['if-range']));
+    if (upstream.status === 416) {
+      res.statusCode = 416;
+      const cr = upstream.headers.get('content-range');
+      if (cr) res.setHeader('Content-Range', cr);
+      return res.end();
+    }
     if (!upstream.ok || !upstream.body) {
       return send(upstream.status || 502, `Failed to fetch image: ${upstream.statusText}`);
     }
@@ -82,11 +94,23 @@ export async function pipeImage(
     // Only relay images/videos, never HTML or scripts from an allowed host.
     if (!/^(image|video)\//i.test(type)) return send(415, 'Unsupported content type');
 
-    res.statusCode = 200;
+    const isVideoType = /^video\//i.test(type);
+    res.statusCode = upstream.status === 206 ? 206 : 200; // 206 = partial content (seeking)
     res.setHeader('Content-Type', type);
+    if (upstream.status === 206 || upstream.headers.get('accept-ranges') === 'bytes') {
+      res.setHeader('Accept-Ranges', 'bytes');
+    }
+    const contentRange = upstream.headers.get('content-range');
+    if (contentRange) res.setHeader('Content-Range', contentRange);
+    // fetch() transparently decompresses, so a compressed Content-Length would be wrong.
     const len = upstream.headers.get('content-length');
-    if (len) res.setHeader('Content-Length', len);
-    res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800, immutable');
+    if (len && !upstream.headers.get('content-encoding')) res.setHeader('Content-Length', len);
+    // Videos: browser cache only. Edge/CDN caching could answer a Range request with the full
+    // file (200), which silently breaks seeking.
+    res.setHeader(
+      'Cache-Control',
+      isVideoType ? 'public, max-age=86400' : 'public, max-age=86400, s-maxage=604800, immutable'
+    );
     res.setHeader('X-Content-Type-Options', 'nosniff');
 
     Readable.fromWeb(upstream.body as any).pipe(res);

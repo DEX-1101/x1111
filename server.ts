@@ -31,8 +31,8 @@ async function startServer() {
   });
 
   // ---- Image proxies ----
-  app.get('/api/proxy-image', (req, res) => pipeImage(first(req.query.url), 'danbooru', res));
-  app.get('/api/pixiv/image', (req, res) => pipeImage(first(req.query.url), 'pixiv', res));
+  app.get('/api/proxy-image', (req, res) => pipeImage(first(req.query.url), 'danbooru', res, req.headers));
+  app.get('/api/pixiv/image', (req, res) => pipeImage(first(req.query.url), 'pixiv', res, req.headers));
 
   // ---- Pixiv JSON proxies ----
   app.get('/api/pixiv/search', async (req, res) => {
