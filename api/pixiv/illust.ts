@@ -1,22 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { pixivJson, pixivIllustUrl } from '../_lib/pixiv.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const id = req.query.id as string;
-  if (!id) return res.status(400).send('Missing id');
-  try {
-    const url = `https://www.pixiv.net/ajax/illust/${id}?lang=en`;
-    const pixivRes = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Referer': 'https://www.pixiv.net/'
-      }
-    });
-    if (!pixivRes.ok) throw new Error('Pixiv illust details failed');
-    const data = await pixivRes.json();
-    res.json(data);
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
+  const id = Array.isArray(req.query.id) ? req.query.id[0] : req.query.id;
+  if (!id || !/^\d+$/.test(id)) return res.status(400).json({ error: 'Missing or invalid id' });
+  const { status, body } = await pixivJson(pixivIllustUrl(id));
+  if (status === 200) res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+  return res.status(status).json(body);
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, ArrowUp, Loader2, ExternalLink, Copy, AlertCircle, RefreshCw, Layers, Check, History, Upload, Download, X, Hash, User, Copyright, Tag as TagIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDebounce } from 'use-debounce';
-import { searchTags } from '../lib/danbooruApi';
+import { searchTags, danbooruJson } from '../lib/danbooruApi';
 import { Tag as DanbooruTag } from '../types';
 
 interface PixivTag {
@@ -28,16 +28,17 @@ const pLimit = (limit: number) => {
 
   return async <T,>(fn: () => Promise<T>): Promise<T> => {
     if (active >= limit) {
+      // The finishing task hands its slot over directly, so `active` never dips below the real count.
       await new Promise<void>(resolve => queue.push(resolve));
+    } else {
+      active++;
     }
-    active++;
     try {
       return await fn();
     } finally {
-      active--;
-      if (queue.length > 0) {
-        queue.shift()!();
-      }
+      const next = queue.shift();
+      if (next) next();
+      else active--;
     }
   };
 };
@@ -59,38 +60,24 @@ async function getDanbooruTag(jaTag: string, pixivTrans: string, pixivRomaji?: s
   }
 
   const promise = limitTagFetch(async () => {
-    const encodedTag = encodeURIComponent(jaTag);
     try {
       // 1. Check Danbooru Aliases
-      const aliasRes = await fetch(`https://danbooru.donmai.us/tag_aliases.json?search[antecedent_name]=${encodedTag}`);
-      if (aliasRes.ok) {
-        const aliases = await aliasRes.json();
-        if (aliases && aliases.length > 0) {
-          for (const alias of aliases) {
-            if (alias.status === 'active') {
-              return alias.consequent_name.replace(/_/g, ' ');
-            }
-          }
-          return aliases[0].consequent_name.replace(/_/g, ' ');
-        }
+      const aliases = await danbooruJson<any[]>('/tag_aliases.json', { 'search[antecedent_name]': jaTag }).catch(() => null);
+      if (aliases && aliases.length > 0) {
+        const active = aliases.find(a => a.status === 'active') ?? aliases[0];
+        return active.consequent_name.replace(/_/g, ' ');
       }
-      
+
       // 2. Check exact tag matches
-      const tagRes = await fetch(`https://danbooru.donmai.us/tags.json?search[name]=${encodedTag}`);
-      if (tagRes.ok) {
-        const tags = await tagRes.json();
-        if (tags && tags.length > 0) {
-          return tags[0].name.replace(/_/g, ' ');
-        }
+      const tags = await danbooruJson<any[]>('/tags.json', { 'search[name]': jaTag }).catch(() => null);
+      if (tags && tags.length > 0) {
+        return tags[0].name.replace(/_/g, ' ');
       }
 
       // 3. Check danbooru wiki pages for the tag
-      const wikiRes = await fetch(`https://danbooru.donmai.us/wiki_pages.json?search[other_names_match]=${encodedTag}`);
-      if (wikiRes.ok) {
-        const wikis = await wikiRes.json();
-        if (wikis && wikis.length > 0) {
-           return wikis[0].title.replace(/_/g, ' ');
-        }
+      const wikis = await danbooruJson<any[]>('/wiki_pages.json', { 'search[other_names_match]': jaTag }).catch(() => null);
+      if (wikis && wikis.length > 0) {
+        return wikis[0].title.replace(/_/g, ' ');
       }
     } catch (err) {
       console.error("Danbooru tag fetch error:", err);
@@ -106,10 +93,13 @@ async function getDanbooruTag(jaTag: string, pixivTrans: string, pixivRomaji?: s
   });
 
   pendingTagRequests.set(jaTag, promise);
-  const fallback = await promise;
-  danbooruTagCache.set(jaTag, fallback);
-  pendingTagRequests.delete(jaTag);
-  return fallback;
+  try {
+    const result = await promise;
+    danbooruTagCache.set(jaTag, result);
+    return result;
+  } finally {
+    pendingTagRequests.delete(jaTag);
+  }
 }
 
 const CATEGORY_COLORS: Record<number, { bg: string, text: string, icon: React.ReactNode }> = {
@@ -176,6 +166,7 @@ export const PixivSearch: React.FC = () => {
   }, [selectedIndex]);
   
   useEffect(() => {
+    const controller = new AbortController();
     const fetchSuggestions = async () => {
       const parts = debouncedValue.split(',');
       const lastPart = parts[parts.length - 1].trim();
@@ -183,16 +174,19 @@ export const PixivSearch: React.FC = () => {
       if (!lastPart || lastPart === '-') {
         setSuggestions([]);
         setShowDropdown(false);
+        setIsSearchingTags(false);
         return;
       }
       setIsSearchingTags(true);
       const searchTerm = lastPart.startsWith('-') ? lastPart.substring(1) : lastPart;
-      const results = await searchTags(searchTerm);
+      const results = await searchTags(searchTerm, controller.signal);
+      if (controller.signal.aborted) return; // a newer search replaced this one
       setSuggestions(results);
       setIsSearchingTags(false);
       setShowDropdown(true);
     };
     fetchSuggestions();
+    return () => controller.abort();
   }, [debouncedValue]);
 
   useEffect(() => {
@@ -233,18 +227,12 @@ export const PixivSearch: React.FC = () => {
        if (/[一-龠]+|[ぁ-ゔ]+|[ァ-ヴー]+/.test(k)) return k;
        let searchName = k.replace(/ /g, '_');
        try {
-         const tagRes = await fetch(`https://danbooru.donmai.us/tags.json?search[name]=${encodeURIComponent(searchName)}`);
-         if(tagRes.ok) {
-            const tags = await tagRes.json();
-            if(tags && tags.length > 0) searchName = tags[0].name;
-         }
-         const wikiRes = await fetch(`https://danbooru.donmai.us/wiki_pages.json?search[title]=${encodeURIComponent(searchName)}`);
-         if(wikiRes.ok) {
-            const wikis = await wikiRes.json();
-            if(wikis && wikis.length > 0 && wikis[0].other_names) {
-               const jaName = wikis[0].other_names.find((n: string) => /[一-龠]+|[ぁ-ゔ]+|[ァ-ヴー]+/.test(n));
-               if(jaName) return jaName;
-            }
+         const tags = await danbooruJson<any[]>('/tags.json', { 'search[name]': searchName });
+         if (tags && tags.length > 0) searchName = tags[0].name;
+         const wikis = await danbooruJson<any[]>('/wiki_pages.json', { 'search[title]': searchName });
+         if (wikis && wikis.length > 0 && wikis[0].other_names) {
+            const jaName = wikis[0].other_names.find((n: string) => /[一-龠]+|[ぁ-ゔ]+|[ァ-ヴー]+/.test(n));
+            if (jaName) return jaName;
          }
        } catch (err) {}
        return k;

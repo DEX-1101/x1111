@@ -95,8 +95,17 @@ export interface Tag {
   related_tags?: string;
 }
 
+export interface MediaVariant {
+  type: string; // "180x180" | "360x360" | "720x720" | "sample" | "original"
+  url: string;
+  width: number;
+  height: number;
+  file_ext: string;
+}
+
 export interface Post {
   id: number;
+  media_asset?: { variants?: MediaVariant[] };
   file_url?: string;
   large_file_url?: string;
   preview_file_url?: string;

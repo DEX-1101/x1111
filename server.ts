@@ -1,168 +1,71 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { proxyDanbooru } from './api/_lib/danbooru.js';
+import { pipeImage } from './api/_lib/imageProxy.js';
+import { pixivJson, pixivSearchUrl, pixivIllustUrl } from './api/_lib/pixiv.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const isProd = process.env.NODE_ENV === 'production';
+const PORT = Number(process.env.PORT) || 3000;
+
+const first = (v: unknown): string | undefined =>
+  Array.isArray(v) ? String(v[0]) : typeof v === 'string' ? v : undefined;
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
 
-  // Proxy endpoint for Danbooru images to bypass hotlink protection
-  app.get('/api/proxy-image', async (req, res) => {
-    const imageUrl = req.query.url as string;
-    if (!imageUrl) {
-      return res.status(400).send('Missing url parameter');
+  // ---- Danbooru JSON proxy (same-origin => no CORS problems) ----
+  app.get('/api/danbooru', async (req, res) => {
+    // Express 5 uses the "simple" query parser, so `search[name]` arrives as a flat key.
+    const params = new URLSearchParams();
+    let apiPath: string | undefined;
+    for (const [key, value] of Object.entries(req.query)) {
+      const v = first(value);
+      if (v === undefined) continue;
+      if (key === 'path') apiPath = v;
+      else params.append(key, v);
     }
-
-    try {
-      console.log(`Proxying image request for: ${imageUrl}`);
-      
-      const commonHeaders = {
-        'User-Agent': 'DanbooruTagExplorer/1.0 (goblin.gabonga.x1@gmail.com)',
-        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-      };
-
-      // Try with Referer first
-      let imageResponse = await fetch(imageUrl, {
-        headers: {
-          ...commonHeaders,
-          'Referer': 'https://danbooru.donmai.us/',
-        },
-      });
-
-      // If 403, try without Referer
-      if (imageResponse.status === 403) {
-        console.log('403 Forbidden with Referer, retrying without Referer...');
-        imageResponse = await fetch(imageUrl, {
-          headers: commonHeaders,
-        });
-      }
-
-      // If still 403, try with a generic browser User-Agent
-      if (imageResponse.status === 403) {
-        console.log('403 Forbidden with descriptive UA, retrying with generic browser UA...');
-        imageResponse = await fetch(imageUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-            'Referer': 'https://danbooru.donmai.us/',
-          },
-        });
-      }
-
-      if (!imageResponse.ok) {
-        console.error(`Failed to fetch image from source: ${imageResponse.status} ${imageResponse.statusText} for ${imageUrl}`);
-        return res.status(imageResponse.status).send(`Failed to fetch image from source: ${imageResponse.statusText}`);
-      }
-
-      // Forward the content type
-      const contentType = imageResponse.headers.get('content-type');
-      if (contentType) {
-        res.setHeader('Content-Type', contentType);
-      }
-
-      // Set cache headers
-      res.setHeader('Cache-Control', 'public, max-age=86400');
-
-      const buffer = await imageResponse.arrayBuffer();
-      res.send(Buffer.from(buffer));
-    } catch (error) {
-      console.error('Error proxying image:', error);
-      res.status(500).send('Internal Server Error');
-    }
+    const out = await proxyDanbooru(apiPath, params);
+    Object.entries(out.headers).forEach(([k, v]) => res.setHeader(k, v));
+    res.status(out.status).send(out.body);
   });
 
-  // Pixiv proxy endpoints
+  // ---- Image proxies ----
+  app.get('/api/proxy-image', (req, res) => pipeImage(first(req.query.url), 'danbooru', res));
+  app.get('/api/pixiv/image', (req, res) => pipeImage(first(req.query.url), 'pixiv', res));
+
+  // ---- Pixiv JSON proxies ----
   app.get('/api/pixiv/search', async (req, res) => {
-    const word = req.query.word as string;
-    if (!word) return res.status(400).send('Missing word');
-    try {
-      const encodedWord = encodeURIComponent(word);
-      const url = `https://www.pixiv.net/ajax/search/artworks/${encodedWord}?word=${encodedWord}&mode=all&p=1&lang=en`;
-      const pixivRes = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept': 'application/json',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Referer': 'https://www.pixiv.net/'
-        }
-      });
-      if (!pixivRes.ok) throw new Error('Pixiv search failed');
-      const data = await pixivRes.json();
-      res.json(data);
-    } catch (e) {
-      res.status(500).json({ error: String(e) });
-    }
+    const word = first(req.query.word);
+    if (!word) return res.status(400).json({ error: 'Missing word' });
+    const { status, body } = await pixivJson(pixivSearchUrl(word));
+    res.status(status).json(body);
   });
 
   app.get('/api/pixiv/illust', async (req, res) => {
-    const id = req.query.id as string;
-    if (!id) return res.status(400).send('Missing id');
-    try {
-      const url = `https://www.pixiv.net/ajax/illust/${id}?lang=en`;
-      const pixivRes = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept': 'application/json',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Referer': 'https://www.pixiv.net/'
-        }
-      });
-      if (!pixivRes.ok) throw new Error('Pixiv illust details failed');
-      const data = await pixivRes.json();
-      res.json(data);
-    } catch (e) {
-      res.status(500).json({ error: String(e) });
-    }
+    const id = first(req.query.id);
+    if (!id || !/^\d+$/.test(id)) return res.status(400).json({ error: 'Missing or invalid id' });
+    const { status, body } = await pixivJson(pixivIllustUrl(id));
+    res.status(status).json(body);
   });
 
-  app.get('/api/pixiv/image', async (req, res) => {
-    const imageUrl = req.query.url as string;
-    if (!imageUrl) return res.status(400).send('Missing url parameter');
-    try {
-      const imageResponse = await fetch(imageUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Referer': 'https://www.pixiv.net/',
-        },
-      });
-      if (!imageResponse.ok) {
-        return res.status(imageResponse.status).send(`Failed to fetch image`);
-      }
-      const contentType = imageResponse.headers.get('content-type');
-      if (contentType) res.setHeader('Content-Type', contentType);
-      res.setHeader('Cache-Control', 'public, max-age=86400');
-      const buffer = await imageResponse.arrayBuffer();
-      res.send(Buffer.from(buffer));
-    } catch (error) {
-      res.status(500).send('Internal Server Error');
-    }
-  });
+  // Unknown /api routes should 404 as JSON instead of falling through to the SPA.
+  app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }));
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
+  if (!isProd) {
+    const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    // NOTE: Express 5 (path-to-regexp v8) throws on app.get('*'), so use a plain middleware fallback.
+    app.use((_req, res) => res.sendFile(path.join(distPath, 'index.html')));
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  app.listen(PORT, '0.0.0.0', () => console.log(`Server running on http://localhost:${PORT}`));
 }
 
-startServer();
+startServer().catch(err => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
+});

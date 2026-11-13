@@ -1,13 +1,64 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Search, Image as ImageIcon, Info, Shield, ShieldAlert, Loader2, 
   Tag as TagIcon, User, Copyright, Hash, X, Copy, Check, 
   ExternalLink, ChevronLeft, ChevronRight, Play, Pause, 
-  Volume2, VolumeX, Download, ArrowUp 
+  Volume2, VolumeX, Download, ArrowUp, Sparkles 
 } from 'lucide-react';
 import { useDebounce } from 'use-debounce';
 import { searchTags, getTagWiki, getPostsByTag, getTag, getPostById } from '../lib/danbooruApi';
 import { Tag, Post, WikiPage } from '../types';
+
+/**
+ * Grid cell width per breakpoint (matches the `columns-*` classes of the posts grid and the
+ * lg/xl side-by-side layout). The browser uses this + the screen's pixel density to download
+ * ONLY the smallest variant that is still sharp (180px / 360px / 720px).
+ */
+const THUMB_SIZES = '(min-width:1536px) 15vw, (min-width:1280px) 18vw, (min-width:1024px) 22vw, (min-width:768px) 30vw, (min-width:640px) 46vw, 92vw';
+
+const buildThumbSrcSet = (post: Post): string | undefined => {
+  const variants = (post.media_asset?.variants ?? [])
+    .filter(v => v.url && v.width > 0)
+    .sort((a, b) => a.width - b.width);
+  return variants.length >= 2 ? variants.map(v => `${v.url} ${v.width}w`).join(', ') : undefined;
+};
+
+/**
+ * Thumbnail that appears instantly (tiny 180px preview, usually already cached) and, when `hd`
+ * is on, cross-fades to a sharper variant once it has loaded. Nothing larger than needed is fetched.
+ */
+const ThumbImage: React.FC<{ post: Post; hd: boolean; className: string }> = ({ post, hd, className }) => {
+  const lowSrc = post.preview_file_url || post.large_file_url || post.file_url;
+  const srcSet = useMemo(() => (hd ? buildThumbSrcSet(post) : undefined), [hd, post]);
+  const hdRef = useRef<HTMLImageElement>(null);
+  const [hdLoaded, setHdLoaded] = useState(false);
+
+  useEffect(() => {
+    // Cached images can finish loading before React attaches onLoad.
+    setHdLoaded(!!srcSet && !!hdRef.current?.complete && hdRef.current.naturalWidth > 0);
+  }, [srcSet]);
+
+  return (
+    <>
+      <img src={lowSrc} alt={`Post ${post.id}`} loading="lazy" decoding="async" referrerPolicy="no-referrer" className={className} />
+      {srcSet && (
+        <img
+          ref={hdRef}
+          src={lowSrc}
+          srcSet={srcSet}
+          sizes={THUMB_SIZES}
+          alt=""
+          aria-hidden="true"
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onLoad={() => setHdLoaded(true)}
+          className={`${className} transition-[opacity,transform] ${hdLoaded ? 'opacity-100' : 'opacity-0'}`}
+        />
+      )}
+    </>
+  );
+};
 import { motion, AnimatePresence } from 'motion/react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 
@@ -21,10 +72,14 @@ const PostPreview: React.FC<{ id: string }> = ({ id }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
     getPostById(id).then(data => {
+      if (cancelled) return;
       setPost(data);
       setLoading(false);
     });
+    return () => { cancelled = true; };
   }, [id]);
 
   if (loading) return <span className="text-slate-400 italic">[Loading Post #{id}...]</span>;
@@ -482,6 +537,7 @@ export const DanbooruSearch: React.FC = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [isLoadingWiki, setIsLoadingWiki] = useState(false);
   
   const [selectedImagePost, setSelectedImagePost] = useState<Post | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -502,6 +558,13 @@ export const DanbooruSearch: React.FC = () => {
   const [copiedTag, setCopiedTag] = useState<string | null>(null);
   const [downloadingIds, setDownloadingIds] = useState<Set<number>>(new Set());
   
+  const [hdThumbs, setHdThumbs] = useState<boolean>(() => {
+    try { return localStorage.getItem('hdThumbs') === 'true'; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('hdThumbs', String(hdThumbs)); } catch {}
+  }, [hdThumbs]);
+
   const [safeMode, setSafeMode] = useState(() => {
     const saved = localStorage.getItem('safeMode');
     return saved !== null ? JSON.parse(saved) : true;
@@ -551,6 +614,9 @@ export const DanbooruSearch: React.FC = () => {
         last.safeMode === currentState.safeMode &&
         last.selectedTag?.name === currentState.selectedTag?.name &&
         last.hasSearched === currentState.hasSearched) {
+      // Same entry, but selectedTag may have been upgraded from a placeholder to the full tag
+      // details (post_count, related_tags...). Keep the snapshot current so undo/redo restores them.
+      last.selectedTag = currentState.selectedTag;
       return;
     }
     
@@ -664,8 +730,8 @@ export const DanbooruSearch: React.FC = () => {
       document.body.appendChild(a);
       a.click();
       
-      window.URL.revokeObjectURL(blobUrl);
       document.body.removeChild(a);
+      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 10_000);
     } catch (error) {
       console.error("Download failed:", error);
       alert("Failed to download image.");
@@ -760,14 +826,17 @@ export const DanbooruSearch: React.FC = () => {
   }, [selectedImagePost, posts]);
 
   useEffect(() => {
+    const controller = new AbortController();
     const fetchSuggestions = async () => {
       if (!debouncedWord.trim() || debouncedWord.trim() === '-') {
         setSuggestions([]);
+        setIsSearching(false);
         return;
       }
       setIsSearching(true);
       const searchTerm = debouncedWord.startsWith('-') ? debouncedWord.substring(1) : debouncedWord;
-      const results = await searchTags(searchTerm);
+      const results = await searchTags(searchTerm, controller.signal);
+      if (controller.signal.aborted) return; // a newer search replaced this one
       setSuggestions(results);
       setIsSearching(false);
       
@@ -778,6 +847,7 @@ export const DanbooruSearch: React.FC = () => {
       }
     };
     fetchSuggestions();
+    return () => controller.abort();
   }, [debouncedWord]);
 
   useEffect(() => {
@@ -802,7 +872,7 @@ export const DanbooruSearch: React.FC = () => {
     });
   };
 
-  const handleSearchSubmit = async () => {
+  const handleSearchSubmit = () => {
     const finalTags = [...queryTags];
     if (inputValue.trim()) {
       finalTags.push(inputValue.trim());
@@ -832,21 +902,10 @@ export const DanbooruSearch: React.FC = () => {
       updated_at: new Date().toISOString()
     };
     
+    // Posts + wiki are loaded by the effects that watch `selectedTag` / `currentPage`,
+    // so this path behaves exactly like undo/redo (no duplicate or out-of-order fetches).
     setSelectedTag(dummyTag);
     setCurrentPage(1);
-    setIsWikiExpanded(false);
-    setIsLoadingDetails(true);
-    setWiki(null);
-    
-    try {
-      const { posts: postsData, hasMore } = await getPostsByTag(formattedQuery, safeMode, 1, postsPerPage);
-      setHasMore(hasMore);
-      setPosts(postsData.filter(p => p.file_url || p.preview_file_url));
-    } catch (error) {
-      console.error("Failed to fetch posts for multi-tag search", error);
-    } finally {
-      setIsLoadingDetails(false);
-    }
   };
 
   const handleSuggestionClick = (tag: Tag) => {
@@ -861,7 +920,7 @@ export const DanbooruSearch: React.FC = () => {
     }, 0);
   };
 
-  const handleSelectTag = async (tag: Tag) => {
+  const handleSelectTag = (tag: Tag) => {
     skipNextDropdownRef.current = true;
     setHasSearched(true);
     setQueryTags([tag.name]);
@@ -869,24 +928,8 @@ export const DanbooruSearch: React.FC = () => {
     setShowDropdown(false);
     setSelectedTag(tag);
     setCurrentPage(1);
-    setIsWikiExpanded(false);
-    setIsLoadingDetails(true);
-    
-    try {
-      const [wikiData, { posts: postsData, hasMore }, tagDetails] = await Promise.all([
-        getTagWiki(tag.name),
-        getPostsByTag(tag.name, safeMode, 1, postsPerPage),
-        getTag(tag.name)
-      ]);
-      setWiki(wikiData);
-      setHasMore(hasMore);
-      setPosts(postsData.filter(p => p.file_url || p.preview_file_url));
-      if (tagDetails) setSelectedTag(tagDetails);
-    } catch (error) {
-      console.error('Error fetching details:', error);
-    } finally {
-      setIsLoadingDetails(false);
-    }
+    // Posts, wiki and full tag details are loaded by the effects below, keyed on the tag name.
+    // That is what keeps them correct when the tag is changed by undo/redo (back/next).
   };
 
   const handlePageChange = (newPage: number) => {
@@ -906,16 +949,50 @@ export const DanbooruSearch: React.FC = () => {
     return tags.filter(t => t.tag !== selectedTag?.name).sort((a, b) => b.count - a.count);
   };
 
+  const selectedTagName = selectedTag?.name;
+
+  // Wiki + full tag details always follow the *current* tag, however it was reached
+  // (search, clicking a tag, back/next). Stale responses are ignored via `cancelled`.
   useEffect(() => {
-    if (selectedTag) {
-      setIsLoadingDetails(true);
-      getPostsByTag(selectedTag.name, safeMode, currentPage, postsPerPage).then(({ posts: postsData, hasMore }) => {
-        setHasMore(hasMore);
-        setPosts(postsData.filter(p => p.file_url || p.preview_file_url));
-        setIsLoadingDetails(false);
-      });
+    setIsWikiExpanded(false);
+    // Multi-tag searches ("a b") and negated tags have no wiki page of their own.
+    if (!selectedTagName || /\s/.test(selectedTagName) || selectedTagName.startsWith('-')) {
+      setWiki(null);
+      setIsLoadingWiki(false);
+      return;
     }
-  }, [safeMode, currentPage, postsPerPage, selectedTag]);
+    let cancelled = false;
+    setWiki(null);
+    setIsLoadingWiki(true);
+    Promise.all([getTagWiki(selectedTagName), getTag(selectedTagName)]).then(([wikiData, tagDetails]) => {
+      if (cancelled) return;
+      setWiki(wikiData);
+      setIsLoadingWiki(false);
+      if (tagDetails) {
+        // Upgrade the placeholder tag (post_count 0, no related tags) to the real one.
+        setSelectedTag(prev => (prev && prev.name === selectedTagName ? tagDetails : prev));
+      }
+    });
+    return () => { cancelled = true; };
+  }, [selectedTagName]);
+
+  useEffect(() => {
+    if (!selectedTagName) {
+      setIsLoadingDetails(false); // tag was cleared while a request was in flight
+      return;
+    }
+    let cancelled = false;
+    setIsLoadingDetails(true);
+    getPostsByTag(selectedTagName, safeMode, currentPage, postsPerPage).then(({ posts: postsData, hasMore }) => {
+      if (cancelled) return; // user changed tag/page/filter while this was loading
+      setHasMore(hasMore);
+      setPosts(postsData.filter(p => p.file_url || p.preview_file_url));
+      setIsLoadingDetails(false);
+    });
+    return () => { cancelled = true; };
+    // Depend on the tag *name*, not the object: handleSelectTag swaps in a richer tag object
+    // (same name) which used to trigger a pointless duplicate fetch.
+  }, [safeMode, currentPage, postsPerPage, selectedTagName]);
 
   return (
     <div className={`w-full flex flex-col transition-all duration-700 ease-in-out ${!hasSearched ? 'flex-1 justify-center' : 'min-h-[600px]'}`}>
@@ -1035,6 +1112,20 @@ export const DanbooruSearch: React.FC = () => {
                   />
                 </div>
 
+                <button
+                  type="button"
+                  onClick={() => setHdThumbs(v => !v)}
+                  aria-pressed={hdThumbs}
+                  title={hdThumbs ? 'Sharp thumbnails ON (loads only the size each card needs)' : 'Sharp thumbnails OFF (smallest data usage)'}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-medium transition-all duration-300 whitespace-nowrap border ${
+                    hdThumbs
+                      ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30 hover:bg-indigo-500/30'
+                      : 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span className="hidden sm:inline text-sm">HD</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -1193,7 +1284,7 @@ export const DanbooruSearch: React.FC = () => {
                         )}
                       </div>
                     ) : (
-                      <p className="text-slate-500 italic text-sm">No wiki page exists.</p>
+                      <p className="text-slate-500 italic text-sm">{isLoadingWiki ? 'Loading wiki...' : 'No wiki page exists.'}</p>
                     )}
                   </div>
 
@@ -1256,7 +1347,7 @@ export const DanbooruSearch: React.FC = () => {
                           {isVideo(post.file_ext) && !post.preview_file_url ? (
                             <video src={post.large_file_url || post.file_url} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                           ) : (
-                            <img src={post.preview_file_url || post.large_file_url || post.file_url} alt={`Post ${post.id}`} loading="lazy" referrerPolicy="no-referrer" className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                            <ThumbImage post={post} hd={hdThumbs} className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                           )}
                           
                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">

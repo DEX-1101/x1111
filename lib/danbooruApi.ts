@@ -3,19 +3,97 @@ import { Tag, Post, WikiPage, TagGroup } from '../types';
 const BASE_URL = 'https://danbooru.donmai.us';
 
 /**
- * Searches for tags matching the query, ordered by popularity.
+ * Browsers cannot call danbooru.donmai.us directly (no CORS headers), so every
+ * JSON request goes through our same-origin proxy: /api/danbooru
  */
-export const searchTags = async (query: string): Promise<Tag[]> => {
-  if (!query) return [];
+const API_PROXY = '/api/danbooru';
+
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const CACHE_MAX_ENTRIES = 300;
+const cache = new Map<string, { time: number; promise: Promise<any> }>();
+
+/**
+ * GET JSON from Danbooru through the proxy, with an in-memory cache and
+ * in-flight de-duplication (identical concurrent calls share one request).
+ * Failed requests are never cached.
+ */
+export async function danbooruGet<T>(
+  path: string,
+  params: Record<string, string | number | undefined> = {},
+  signal?: AbortSignal
+): Promise<T> {
+  const qs = new URLSearchParams({ path });
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== '') qs.set(k, String(v));
+  }
+  const url = `${API_PROXY}?${qs.toString()}`;
+
+  const hit = cache.get(url);
+  if (hit && Date.now() - hit.time < CACHE_TTL_MS) return hit.promise;
+
+  // NOTE: the shared promise is intentionally NOT tied to a single caller's AbortSignal,
+  // otherwise one cancelled caller would reject everybody waiting on the same request.
+  const promise = fetch(url).then(async res => {
+    if (!res.ok) throw new Error(`Danbooru request failed: ${res.status}`);
+    return (await res.json()) as T;
+  });
+
+  cache.set(url, { time: Date.now(), promise });
+  if (cache.size > CACHE_MAX_ENTRIES) cache.delete(cache.keys().next().value as string);
+  promise.catch(() => cache.delete(url));
+
+  if (!signal) return promise;
+  if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+  return new Promise<T>((resolve, reject) => {
+    signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+    promise.then(resolve, reject);
+  });
+}
+
+/** Route Danbooru-hosted media through our image proxy (the CDN blocks hotlinking). */
+const fixImageUrl = (url?: string) => {
+  if (!url) return url;
+  if (url.startsWith('/api/proxy-image')) return url; // already proxied
+  if (url.startsWith('/')) url = `${BASE_URL}${url}`;
+  return `/api/proxy-image?url=${encodeURIComponent(url)}`;
+};
+
+const withProxiedImages = (post: Post): Post => ({
+  ...post,
+  file_url: fixImageUrl(post.file_url),
+  large_file_url: fixImageUrl(post.large_file_url),
+  preview_file_url: fixImageUrl(post.preview_file_url),
+  // Keep only the small thumbnail variants (used for sharp, data-friendly thumbnails).
+  media_asset: post.media_asset?.variants
+    ? {
+        variants: post.media_asset.variants
+          .filter(v => /^(180x180|360x360|720x720)$/.test(v.type) && v.url)
+          .map(v => ({ ...v, url: fixImageUrl(v.url) as string })),
+      }
+    : undefined,
+});
+
+const escapeRegex = (s: string) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+/** Danbooru wildcard ("*") -> anchored RegExp. Tags like `miku_(vocaloid)` contain regex metacharacters. */
+const wildcardToRegex = (pattern: string) =>
+  new RegExp('^' + pattern.split('*').map(escapeRegex).join('.*') + '$');
+
+/**
+ * Searches for tags matching the query, ordered by popularity.
+ * Pass an AbortSignal to cancel stale autocomplete requests.
+ */
+export const searchTags = async (query: string, signal?: AbortSignal): Promise<Tag[]> => {
+  // Danbooru tags use underscores, so "hatsune miku" must become "hatsune_miku".
+  const q = query.trim().toLowerCase().replace(/\s+/g, '_');
+  if (!q) return [];
   try {
-    const res = await fetch(`${BASE_URL}/tags.json?search[name_matches]=*${query}*&search[order]=count&limit=10`);
-    if (!res.ok) {
-      console.error(`Failed to fetch tags: ${res.status} ${res.statusText}`);
-      throw new Error(`Failed to fetch tags: ${res.status}`);
-    }
-    return await res.json();
-  } catch (error) {
-    console.error('Error searching tags:', error);
+    return await danbooruGet<Tag[]>(
+      '/tags.json',
+      { 'search[name_matches]': `*${q}*`, 'search[order]': 'count', limit: 10 },
+      signal
+    );
+  } catch (error: any) {
+    if (error?.name !== 'AbortError') console.error('Error searching tags:', error);
     return [];
   }
 };
@@ -25,12 +103,7 @@ export const searchTags = async (query: string): Promise<Tag[]> => {
  */
 export const getTag = async (tagName: string): Promise<Tag | null> => {
   try {
-    const res = await fetch(`${BASE_URL}/tags.json?search[name]=${tagName}`);
-    if (!res.ok) {
-      console.error(`Failed to fetch tag details: ${res.status} ${res.statusText}`);
-      return null;
-    }
-    const data = await res.json();
+    const data = await danbooruGet<Tag[]>('/tags.json', { 'search[name]': tagName });
     return data.length > 0 ? data[0] : null;
   } catch (error) {
     console.error('Error fetching tag:', error);
@@ -43,12 +116,7 @@ export const getTag = async (tagName: string): Promise<Tag | null> => {
  */
 export const getTagWiki = async (tagName: string): Promise<WikiPage | null> => {
   try {
-    const res = await fetch(`${BASE_URL}/wiki_pages.json?search[title]=${tagName}`);
-    if (!res.ok) {
-      console.error(`Failed to fetch wiki: ${res.status} ${res.statusText}`);
-      return null;
-    }
-    const data = await res.json();
+    const data = await danbooruGet<WikiPage[]>('/wiki_pages.json', { 'search[title]': tagName });
     return data.length > 0 ? data[0] : null;
   } catch (error) {
     console.error('Error fetching wiki:', error);
@@ -57,26 +125,9 @@ export const getTagWiki = async (tagName: string): Promise<WikiPage | null> => {
 };
 
 export const getPostById = async (id: string): Promise<Post | null> => {
+  if (!/^\d+$/.test(id)) return null;
   try {
-    const res = await fetch(`${BASE_URL}/posts/${id}.json`);
-    if (!res.ok) {
-      console.error(`Failed to fetch post by ID: ${res.status} ${res.statusText}`);
-      return null;
-    }
-    const post: Post = await res.json();
-    
-    const fixImageUrl = (url?: string) => {
-      if (!url) return url;
-      if (url.startsWith('/')) url = `${BASE_URL}${url}`;
-      return `/api/proxy-image?url=${encodeURIComponent(url)}`;
-    };
-
-    return {
-      ...post,
-      file_url: fixImageUrl(post.file_url),
-      large_file_url: fixImageUrl(post.large_file_url),
-      preview_file_url: fixImageUrl(post.preview_file_url),
-    };
+    return withProxiedImages(await danbooruGet<Post>(`/posts/${id}.json`));
   } catch (error) {
     console.error('Error fetching post:', error);
     return null;
@@ -104,12 +155,7 @@ export const getPostsByTag = async (tagName: string, safeMode: boolean = true, p
     // If we have client tags, fetch more results to increase the chance of finding matches after filtering
     const fetchLimit = clientTags.length > 0 ? 200 : limit;
     
-    const res = await fetch(`${BASE_URL}/posts.json?tags=${encodeURIComponent(tagsParam)}&limit=${fetchLimit}&page=${page}`);
-    if (!res.ok) {
-      console.error(`Failed to fetch posts: ${res.status} ${res.statusText}`);
-      throw new Error(`Failed to fetch posts: ${res.status}`);
-    }
-    let posts: Post[] = await res.json();
+    let posts = await danbooruGet<Post[]>('/posts.json', { tags: tagsParam, limit: fetchLimit, page });
     const hasMore = posts.length === fetchLimit;
     
     if (clientTags.length > 0) {
@@ -119,13 +165,13 @@ export const getPostsByTag = async (tagName: string, safeMode: boolean = true, p
           if (ct.startsWith('-')) {
             const tagToExclude = ct.substring(1);
             if (tagToExclude.includes('*')) {
-              const regex = new RegExp('^' + tagToExclude.replace(/\*/g, '.*') + '$');
+              const regex = wildcardToRegex(tagToExclude);
               return !postTags.some(t => regex.test(t));
             }
             return !postTags.includes(tagToExclude);
           }
           if (ct.includes('*')) {
-            const regex = new RegExp('^' + ct.replace(/\*/g, '.*') + '$');
+            const regex = wildcardToRegex(ct);
             return postTags.some(t => regex.test(t));
           }
           return postTags.includes(ct);
@@ -133,23 +179,7 @@ export const getPostsByTag = async (tagName: string, safeMode: boolean = true, p
       });
     }
     
-    // Danbooru's CDN (cdn.donmai.us) strictly blocks hotlinking.
-    // We bypass this by proxying the image through our own backend.
-    const fixImageUrl = (url?: string) => {
-      if (!url) return url;
-      if (url.startsWith('/')) url = `${BASE_URL}${url}`;
-      return `/api/proxy-image?url=${encodeURIComponent(url)}`;
-    };
-
-    return {
-      posts: posts.map(post => ({
-        ...post,
-        file_url: fixImageUrl(post.file_url),
-        large_file_url: fixImageUrl(post.large_file_url),
-        preview_file_url: fixImageUrl(post.preview_file_url),
-      })),
-      hasMore
-    };
+    return { posts: posts.map(withProxiedImages), hasMore };
   } catch (error) {
     console.error('Error fetching posts:', error);
     return { posts: [], hasMore: false };
@@ -161,9 +191,7 @@ export const getPostsByTag = async (tagName: string, safeMode: boolean = true, p
  */
 export const getTagGroups = async (page: number = 1): Promise<TagGroup[]> => {
   try {
-    const res = await fetch(`${BASE_URL}/tag_groups.json?limit=50&page=${page}`);
-    if (!res.ok) throw new Error('Failed to fetch tag groups');
-    return await res.json();
+    return await danbooruGet<TagGroup[]>('/tag_groups.json', { limit: 50, page });
   } catch (error) {
     console.error('Error fetching tag groups:', error);
     return [];
@@ -182,3 +210,6 @@ export const cleanDText = (text: string): string => {
     .replace(/h\d\./g, '') // Remove header markers like h1., h2.
     .trim();
 };
+
+/** Public alias for components that need an endpoint without a dedicated helper. */
+export const danbooruJson = danbooruGet;
